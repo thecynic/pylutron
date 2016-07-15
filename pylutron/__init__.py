@@ -65,7 +65,10 @@ class LutronConnection(threading.Thread):
   def send(self, cmd):
     """Sends the specified command to the lutron controller."""
     _LOGGER.debug("Sending: %s" % cmd)
-    self._telnet.write(cmd.encode('ascii') + b'\r\n')
+    try:
+      self._telnet.write(cmd.encode('ascii') + b'\r\n')
+    except BrokenPipeError:
+      self._disconnect()
 
   def _do_login(self):
     """Executes the login procedure (telnet) as well as setting up some
@@ -83,6 +86,13 @@ class LutronConnection(threading.Thread):
     self.send("#MONITORING,5,1")
     self.send("#MONITORING,6,1")
     self.send("#MONITORING,8,1")
+
+  def _disconnect(self):
+    with self._lock:
+      self._connected = False
+      self._connect_cond.notify_all()
+      self._telnet = None
+      _LOGGER.warning("Disconnected")
 
   def _maybe_reconnect(self):
     """Reconnects to the controller if we have been previously disconnected."""
@@ -106,10 +116,7 @@ class LutronConnection(threading.Thread):
       try:
         line = self._telnet.read_until(b"\n")
       except EOFError:
-        with self._lock:
-          self._connected = False
-          self._connect_cond.notify_all()
-          _LOGGER.warning("Disconnected")
+        self._disconnect()
         continue
       self._recv_cb(line.decode('ascii').rstrip())
 
