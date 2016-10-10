@@ -13,10 +13,11 @@ setup(
     packages=find_packages(),
     classifiers = [
         'Development Status :: 3 - Alpha',
-        'License :: OSI Approved :: The MIT License (MIT)',
+        'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.4',
+        'Topic :: Home Automation',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     install_requires=[],
