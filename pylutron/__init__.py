@@ -257,12 +257,13 @@ class Lutron(object):
   OP_QUERY = '?'
   OP_RESPONSE = '~'
 
-  def __init__(self, host, user, password):
+  def __init__(self, host, user, password, cache_file=None):
     """Initializes the Lutron object. No connection is made to the remote
     device."""
     self._host = host
     self._user = user
     self._password = password
+    self._cache_file = cache_file
     self._name = None
     self._conn = LutronConnection(host, user, password, self._recv)
     self._ids = {}
@@ -324,12 +325,25 @@ class Lutron(object):
     self._conn.send(op + out_cmd)
 
   def load_xml_db(self):
-    """Load the Lutron database from the server."""
+    """Load the Lutron database from the server. If a locally cached copy is
+    available, use that instead."""
 
-    import urllib.request
-    xmlfile = urllib.request.urlopen('http://' + self._host + '/DbXmlInfo.xml')
-    xml_db = xmlfile.read()
-    xmlfile.close()
+    loaded_from_cache = False
+
+    if self._cache_file:
+      try:
+        with open(self._cache_file, 'rb') as f:
+          xml_db = f.read()
+          loaded_from_cache = True
+      except Exception:
+        pass
+
+    if not loaded_from_cache:
+      import urllib.request
+      url = 'http://' + self._host + '/DbXmlInfo.xml'
+      with urllib.request.urlopen(url) as xmlfile:
+        xml_db = xmlfile.read()
+
     _LOGGER.info("Loaded xml db")
 
     parser = LutronXmlDbParser(lutron=self, xml_db_str=xml_db)
@@ -339,6 +353,10 @@ class Lutron(object):
 
     _LOGGER.info('Found Lutron project: %s, %d areas' % (
         self._name, len(self.areas)))
+
+    if self._cache_file and not loaded_from_cache:
+      with open(self._cache_filename, 'wb') as f:
+        f.write(xml_db)
 
     return True
 
