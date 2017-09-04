@@ -257,13 +257,12 @@ class Lutron(object):
   OP_QUERY = '?'
   OP_RESPONSE = '~'
 
-  def __init__(self, host, user, password, cache_file=None):
+  def __init__(self, host, user, password):
     """Initializes the Lutron object. No connection is made to the remote
     device."""
     self._host = host
     self._user = user
     self._password = password
-    self._cache_file = cache_file
     self._name = None
     self._conn = LutronConnection(host, user, password, self._recv)
     self._ids = {}
@@ -324,27 +323,26 @@ class Lutron(object):
         (cmd, str(integration_id)) + tuple((str(x) for x in args)))
     self._conn.send(op + out_cmd)
 
-  def load_xml_db(self):
+  def load_xml_db(self, cache_path=None):
     """Load the Lutron database from the server. If a locally cached copy is
     available, use that instead."""
-
-    loaded_from_cache = False
-
-    if self._cache_file:
+    xml_db = None
+    loaded_from = None
+    if cache_path:
       try:
-        with open(self._cache_file, 'rb') as f:
+        with open(cache_path, 'rb') as f:
           xml_db = f.read()
-          loaded_from_cache = True
+          loaded_from = 'cache'
       except Exception:
         pass
-
-    if not loaded_from_cache:
+    if not loaded_from:
       import urllib.request
       url = 'http://' + self._host + '/DbXmlInfo.xml'
       with urllib.request.urlopen(url) as xmlfile:
         xml_db = xmlfile.read()
+        loaded_from = 'repeater'
 
-    _LOGGER.info("Loaded xml db")
+    _LOGGER.info("Loaded xml db from %s" % loaded_from)
 
     parser = LutronXmlDbParser(lutron=self, xml_db_str=xml_db)
     assert(parser.parse())     # throw our own exception
@@ -354,8 +352,8 @@ class Lutron(object):
     _LOGGER.info('Found Lutron project: %s, %d areas' % (
         self._name, len(self.areas)))
 
-    if self._cache_file and not loaded_from_cache:
-      with open(self._cache_filename, 'wb') as f:
+    if cache_path and loaded_from == 'repeater':
+      with open(cache_path, 'wb') as f:
         f.write(xml_db)
 
     return True
