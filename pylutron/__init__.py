@@ -186,6 +186,7 @@ class LutronXmlDbParser(object):
           continue
         if device_xml.get('DeviceType') in (
                 'SEETOUCH_KEYPAD',
+                'SEETOUCH_TABLETOP_KEYPAD',
                 'PICO_KEYPAD',
                 'HYBRID_SEETOUCH_KEYPAD'):
           keypad = self._parse_keypad(device_xml)
