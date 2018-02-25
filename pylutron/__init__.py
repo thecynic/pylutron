@@ -529,11 +529,11 @@ class Button(object):
   def __str__(self):
     """Pretty printed string value of the Button object."""
     return 'Button name: "%s" num: %d action: "%s"' % (
-        self._name, self._num, self._action)
+        self._name, self._num, self._direction)
 
   def __repr__(self):
     """String representation of the Button object."""
-    return str({'name': self._name, 'num': self._num, 'action': self._action})
+    return str({'name': self._name, 'num': self._num, 'direction': self._direction})
 
   @property
   def name(self):
