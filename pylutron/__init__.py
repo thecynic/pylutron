@@ -216,10 +216,15 @@ class LutronXmlDbParser(object):
     if not components:
       return keypad
     for comp in components:
-      if comp.tag != 'Component' or comp.get('ComponentType') != 'BUTTON':
+      if comp.tag != 'Component':
         continue
-      button = self._parse_button(comp)
-      keypad.add_button(button)
+      comp_type = comp.get('ComponentType')
+      if comp_type == 'BUTTON':
+        button = self._parse_button(comp)
+        keypad.add_button(button)
+      elif comp_type == 'LED':
+        led = self._parse_led(keypad, comp)
+        keypad.add_led(led)
     return keypad
 
   def _parse_button(self, component_xml):
@@ -239,6 +244,16 @@ class LutronXmlDbParser(object):
                     button_type=button_type,
                     direction=direction)
     return button
+
+  def _parse_led(self, keypad, component_xml):
+    """Parses an LED device that part of a keypad."""
+    component_num = int(component_xml.get('ComponentNumber'))
+    led_num = component_num - 80
+    led = Led(self._lutron,
+              keypad=keypad,
+              led_num=led_num,
+              component_num=component_num)
+    return led
 
   def _parse_motion_sensor(self, sensor_xml):
     """Parses a motion sensor object.
@@ -552,6 +567,36 @@ class Button(object):
     return self._button_type
 
 
+class Led(object):
+  """This object represents a keypad LED that we can turn on/off and
+  handle events for (led toggled by scenes)."""
+  def __init__(self, lutron, keypad, led_num, component_num):
+    self._lutron = lutron
+    self._keypad = keypad
+    self._led_num = led_num
+    self._component_num = component_num
+
+  def __str__(self):
+    """Pretty printed string value of the Led object."""
+    return 'LED keypad: "%s" num: %d component_num: %d"' % (
+        self._keypad.name, self._led_num, self._component_num)
+
+  def __repr__(self):
+    """String representation of the Led object."""
+    return str({'keypad': self._keypad, 'led_num': self._led_num,
+               'component_num': self._component_num})
+
+  @property
+  def number(self):
+    """Returns the LED number."""
+    return self._led_num
+
+  @property
+  def component_number(self):
+    """Returns the LED component number."""
+    return self._component_num
+
+
 class Keypad(LutronEntity):
   """Object representing a Lutron keypad.
   
@@ -564,6 +609,7 @@ class Keypad(LutronEntity):
     """Initializes the Keypad object."""
     super(Keypad, self).__init__(lutron, name, integration_id)
     self._buttons = []
+    self._leds = []
     self._lutron.register_id(Keypad.CMD_TYPE, self)
 
   def add_button(self, button):
@@ -571,10 +617,24 @@ class Keypad(LutronEntity):
     dispatch button events."""
     self._buttons.append(button)
 
+  def add_led(self, led):
+    """Add an LED that's part of this keypad."""
+    self._leds.append(led)
+
+  @property
+  def name(self):
+    """Returns the name of this keypad"""
+    return self._name
+
   @property
   def buttons(self):
     """Return a tuple of buttons for this keypad."""
     return tuple(button for button in self._buttons)
+
+  @property
+  def leds(self):
+    """Return a tuple of leds for this keypad."""
+    return tuple(led for led in self._leds)
 
   def handle_update(self, args):
     """The callback invoked by the main event loop if there's an event from this keypad."""
