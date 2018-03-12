@@ -221,14 +221,14 @@ class LutronXmlDbParser(object):
         continue
       comp_type = comp.get('ComponentType')
       if comp_type == 'BUTTON':
-        button = self._parse_button(comp)
+        button = self._parse_button(keypad, comp)
         keypad.add_button(button)
       elif comp_type == 'LED':
         led = self._parse_led(keypad, comp)
         keypad.add_led(led)
     return keypad
 
-  def _parse_button(self, component_xml):
+  def _parse_button(self, keypad, component_xml):
     """Parses a button device that part of a keypad."""
     button_xml = component_xml.find('Button')
     name = button_xml.get('Engraving')
@@ -239,7 +239,7 @@ class LutronXmlDbParser(object):
       name = 'Dimmer ' + direction
     if not name:
       name = "Unknown Button"
-    button = Button(self._lutron,
+    button = Button(self._lutron, keypad,
                     name=name,
                     num=int(component_xml.get('ComponentNumber')),
                     button_type=button_type,
@@ -250,8 +250,8 @@ class LutronXmlDbParser(object):
     """Parses an LED device that part of a keypad."""
     component_num = int(component_xml.get('ComponentNumber'))
     led_num = component_num - 80
-    led = Led(self._lutron,
-              keypad=keypad,
+    led = Led(self._lutron, keypad,
+              name=('LED %d' % led_num),
               led_num=led_num,
               component_num=component_num)
     return led
@@ -532,12 +532,37 @@ class Output(LutronEntity):
     return self.type != 'NON_DIM' and not self.type.startswith('CCO_')
 
 
-class Button(object):
+class KeypadComponent(object):
+  """Base class for a keypad component such as a button, or an LED."""
+  def __init__(self, lutron, keypad, name, component_num):
+    self._lutron = lutron
+    self._keypad = keypad
+    self._name = name
+    self._component_num = component_num
+
+  @property
+  def name(self):
+    """Returns the name of the component."""
+    return self._name
+
+  @property
+  def component_number(self):
+    """Return the component number, which is referenced in commands and
+    events."""
+    return self._component_num
+
+  def handle_update(self, action, params):
+    """Handle the specified action on this component."""
+    _LOGGER.debug('Keypad: "%s" Handling "%s" Action: %s Params: %s"' % (
+                  self._keypad.name, self.name, action, params))
+    return False
+
+
+class Button(KeypadComponent):
   """This object represents a keypad button that we can trigger and handle
   events for (button presses)."""
-  def __init__(self, lutron, name, num, button_type, direction):
-    self._lutron = lutron
-    self._name = name
+  def __init__(self, lutron, keypad, name, num, button_type, direction):
+    super(Button, self).__init__(lutron, keypad, name, num)
     self._num = num
     self._button_type = button_type
     self._direction = direction
@@ -545,17 +570,12 @@ class Button(object):
   def __str__(self):
     """Pretty printed string value of the Button object."""
     return 'Button name: "%s" num: %d type: "%s" direction: "%s"' % (
-        self._name, self._num, self._button_type, self._direction)
+        self.name, self.number, self._button_type, self._direction)
 
   def __repr__(self):
     """String representation of the Button object."""
-    return str({'name': self._name, 'num': self._num,
+    return str({'name': self.name, 'num': self.number,
                'type': self._button_type, 'direction': self._direction})
-
-  @property
-  def name(self):
-    """Returns the name of the button."""
-    return self._name
 
   @property
   def number(self):
@@ -568,24 +588,22 @@ class Button(object):
     return self._button_type
 
 
-class Led(object):
+class Led(KeypadComponent):
   """This object represents a keypad LED that we can turn on/off and
   handle events for (led toggled by scenes)."""
-  def __init__(self, lutron, keypad, led_num, component_num):
-    self._lutron = lutron
-    self._keypad = keypad
+  def __init__(self, lutron, keypad, name, led_num, component_num):
+    super(Led, self).__init__(lutron, keypad, name, component_num)
     self._led_num = led_num
-    self._component_num = component_num
 
   def __str__(self):
     """Pretty printed string value of the Led object."""
-    return 'LED keypad: "%s" num: %d component_num: %d"' % (
-        self._keypad.name, self._led_num, self._component_num)
+    return 'LED keypad: "%s" name: "%s" num: %d component_num: %d"' % (
+        self._keypad.name, self.name, self._led_num, self.component_number)
 
   def __repr__(self):
     """String representation of the Led object."""
-    return str({'keypad': self._keypad, 'led_num': self._led_num,
-               'component_num': self._component_num})
+    return str({'keypad': self._keypad, 'name': self.name,
+                'num': self._led_num, 'component_num': self.component_number})
 
   @property
   def number(self):
@@ -596,6 +614,16 @@ class Led(object):
   def component_number(self):
     """Returns the LED component number."""
     return self._component_num
+
+  @property
+  def state(self):
+    """Returns the current LED state by querying the remote controller."""
+    return None
+
+  @state.setter
+  def state(self, new_state):
+    """Sets the new output level."""
+    return
 
 
 class Keypad(LutronEntity):
@@ -611,16 +639,19 @@ class Keypad(LutronEntity):
     super(Keypad, self).__init__(lutron, name, integration_id)
     self._buttons = []
     self._leds = []
+    self._components = {}
     self._lutron.register_id(Keypad.CMD_TYPE, self)
 
   def add_button(self, button):
     """Adds a button that's part of this keypad. We'll use this to
     dispatch button events."""
     self._buttons.append(button)
+    self._components[button.component_number] = button
 
   def add_led(self, led):
     """Add an LED that's part of this keypad."""
     self._leds.append(led)
+    self._components[led.component_number] = led
 
   @property
   def name(self):
@@ -644,7 +675,9 @@ class Keypad(LutronEntity):
     params = [int(x) for x in args[2:]]
     _LOGGER.debug("Updating %d(%s): c=%d a=%d params=%s" % (
         self._integration_id, self._name, component, action, params))
-    return True
+    if component in self._components:
+      return self._components[component].handle_update(action, params)
+    return False
 
 
 class MotionSensor(object):
