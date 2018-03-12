@@ -82,6 +82,7 @@ class LutronConnection(threading.Thread):
 
     self.send("#MONITORING,12,2")
     self.send("#MONITORING,255,2")
+    self.send("#MONITORING,3,1")
     self.send("#MONITORING,4,1")
     self.send("#MONITORING,5,1")
     self.send("#MONITORING,6,1")
