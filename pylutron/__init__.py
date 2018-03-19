@@ -62,15 +62,26 @@ class LutronConnection(threading.Thread):
     with self._lock:
       self._connect_cond.wait_for(lambda: self._connected)
 
-  def send(self, cmd):
-    """Sends the specified command to the lutron controller."""
+  def _send_locked(self, cmd):
+    """Sends the specified command to the lutron controller.
+
+    Assumes self._lock is held.
+    """
     _LOGGER.debug("Sending: %s" % cmd)
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
     except BrokenPipeError:
-      self._disconnect()
+      self._disconnect_locked()
 
-  def _do_login(self):
+  def send(self, cmd):
+    """Sends the specified command to the lutron controller.
+
+    Must not hold self._lock.
+    """
+    with self._lock:
+      self._send_locked(cmd)
+
+  def _do_login_locked(self):
     """Executes the login procedure (telnet) as well as setting up some
     connection defaults like turning off the prompt, etc."""
     self._telnet = telnetlib.Telnet(self._host)
@@ -80,31 +91,27 @@ class LutronConnection(threading.Thread):
     self._telnet.write(self._password + b'\r\n')
     self._telnet.read_until(LutronConnection.PROMPT)
 
-    self.send("#MONITORING,12,2")
-    self.send("#MONITORING,255,2")
-    self.send("#MONITORING,3,1")
-    self.send("#MONITORING,4,1")
-    self.send("#MONITORING,5,1")
-    self.send("#MONITORING,6,1")
-    self.send("#MONITORING,8,1")
+    self._send_locked("#MONITORING,12,2")
+    self._send_locked("#MONITORING,255,2")
+    self._send_locked("#MONITORING,3,1")
+    self._send_locked("#MONITORING,4,1")
+    self._send_locked("#MONITORING,5,1")
+    self._send_locked("#MONITORING,6,1")
+    self._send_locked("#MONITORING,8,1")
 
-  def _disconnect(self):
-    with self._lock:
-      self._connected = False
-      self._connect_cond.notify_all()
-      self._telnet = None
-      _LOGGER.warning("Disconnected")
+  def _disconnect_locked(self):
+    """Closes the current connection. Assume self._lock is held."""
+    self._connected = False
+    self._connect_cond.notify_all()
+    self._telnet = None
+    _LOGGER.warning("Disconnected")
 
   def _maybe_reconnect(self):
     """Reconnects to the controller if we have been previously disconnected."""
     with self._lock:
       if not self._connected: 
         _LOGGER.info("Connecting")
-        self._lock.release()
-        try:
-          self._do_login()
-        finally:
-          self._lock.acquire()
+        self._do_login_locked()
         self._connected = True
         self._connect_cond.notify_all()
         _LOGGER.info("Connected")
@@ -114,11 +121,22 @@ class LutronConnection(threading.Thread):
     _LOGGER.info("Started")
     while True:
       self._maybe_reconnect()
+      line = ''
       try:
-        line = self._telnet.read_until(b"\n")
+        # If someone is sending a command, we can lose our connection so grab a
+        # copy beforehand. We don't need the lock because if the connection is
+        # open, we are the only ones that will read from telnet (the reconnect
+        # code runs synchronously in this loop).
+        t = self._telnet
+        if t is not None:
+          line = t.read_until(b"\n")
       except EOFError:
-        self._disconnect()
-        continue
+        try:
+          self._lock.acquire()
+          self._disconnect_locked()
+          continue
+        finally:
+          self._lock.release()
       self._recv_cb(line.decode('ascii').rstrip())
 
 
