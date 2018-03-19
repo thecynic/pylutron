@@ -292,7 +292,12 @@ class Lutron(object):
     self._conn = LutronConnection(host, user, password, self._recv)
     self._ids = {}
     self._subscribers = {}
-    self.areas = []
+    self._areas = []
+
+  @property
+  def areas(self):
+    """Return the areas that were discovered for this Lutron controller."""
+    return self._areas
 
   def subscribe(self, obj, handler):
     """Subscribes to status updates of the requested object.
@@ -359,7 +364,7 @@ class Lutron(object):
 
     parser = LutronXmlDbParser(lutron=self, xml_db_str=xml_db)
     assert(parser.parse())     # throw our own exception
-    self.areas = parser.areas
+    self._areas = parser.areas
     self._name = parser.project_name
 
     _LOGGER.info('Found Lutron project: %s, %d areas' % (
