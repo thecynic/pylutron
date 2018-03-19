@@ -203,7 +203,7 @@ class LutronXmlDbParser(object):
     lights/outlets, etc."""
     output = Output(self._lutron,
                     name=output_xml.get('Name'),
-                    watts=output_xml.get('Wattage'),
+                    watts=int(output_xml.get('Wattage')),
                     output_type=output_xml.get('OutputType'),
                     integration_id=int(output_xml.get('IntegrationID')))
     return output
@@ -464,7 +464,7 @@ class Output(LutronEntity):
   def __str__(self):
     """Returns a pretty-printed string for this object."""
     return 'Output name: "%s" watts: %d type: "%s" id: %d' % (
-        self._name, self._watts, self._type, self._integration_id)
+        self._name, self._watts, self._output_type, self._integration_id)
 
   def __repr__(self):
     """Returns a stringified representation of this object."""
