@@ -559,6 +559,7 @@ class Keypad(LutronEntity):
   (and drop them on the floor).
   """
   CMD_TYPE = 'DEVICE'
+  ACTION_PRESS = 3
 
   def __init__(self, lutron, name, integration_id):
     """Initializes the Keypad object."""
@@ -570,6 +571,11 @@ class Keypad(LutronEntity):
     """Adds a button that's part of this keypad. We'll use this to
     dispatch button events."""
     self._buttons.append(button)
+
+  def press(self, button):
+    """Send a press command to a button on the keypad."""
+    if button in self._buttons:
+      self._lutron.send(Lutron.OP_EXECUTE, Keypad.CMD_TYPE, self._integration_id, button._num, Keypad.ACTION_PRESS)
 
   @property
   def buttons(self):
