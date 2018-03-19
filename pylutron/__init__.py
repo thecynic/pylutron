@@ -7,10 +7,13 @@ for enumerating and controlling the loads are supported.
 __author__ = "Dima Zavin"
 __copyright__ = "Copyright 2016, Dima Zavin"
 
+from enum import Enum
 import logging
 import telnetlib
 import threading
 import time
+
+from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +29,12 @@ class IntegrationIdExistsError(LutronException):
 
 class ConnectionExistsError(LutronException):
   """Raised when a connection already exists (e.g. user calls connect() twice)."""
+  pass
+
+
+class InvalidSubscription(LutronException):
+  """Raised when an invalid subscription is requested (e.g. calling
+  Lutron.subscribe on an incompatible object."""
   pass
 
 
@@ -309,7 +318,7 @@ class Lutron(object):
     self._name = None
     self._conn = LutronConnection(host, user, password, self._recv)
     self._ids = {}
-    self._subscribers = {}
+    self._legacy_subscribers = {}
     self._areas = []
 
   @property
@@ -320,10 +329,18 @@ class Lutron(object):
   def subscribe(self, obj, handler):
     """Subscribes to status updates of the requested object.
 
+    DEPRECATED
+
     The handler will be invoked when the controller sends a notification
     regarding changed state. The user can then further query the object for the
     state itself."""
-    self._subscribers[obj] = handler
+    if not isinstance(obj, LutronEntity):
+      raise InvalidSubscription("Subscription target not a LutronEntity")
+    _LOGGER.warning("DEPRECATED: Subscribing via Lutron.subscribe is obsolete. "
+                    "Please use LutronEntity.subscribe")
+    if obj not in self._legacy_subscribers:
+      self._legacy_subscribers[obj] = handler
+      obj.subscribe(self._dispatch_legacy_subscriber, None)
 
   def register_id(self, cmd_type, obj):
     """Registers an object (through its integration id) to receive update
@@ -333,6 +350,13 @@ class Lutron(object):
     if obj.id in ids:
       raise IntegrationIdExistsError
     self._ids[cmd_type][obj.id] = obj
+
+  def _dispatch_legacy_subscriber(self, obj, *args, **kwargs):
+    """This dispatches the registered callback for 'obj'. This is only used
+    for legacy subscribers since new users should register with the target
+    object directly."""
+    if obj in self._legacy_subscribers:
+      self._legacy_subscribers[obj](obj)
 
   def _recv(self, line):
     """Invoked by the connection manager to process incoming data."""
@@ -355,11 +379,7 @@ class Lutron(object):
       _LOGGER.warning("Unknown id %d (%s)" % (integration_id, line))
       return
     obj = ids[integration_id]
-    # First let the device update itself
     handled = obj.handle_update(args)
-    # Now notify anyone who cares that device  may have changed
-    if handled and obj in self._subscribers:
-      self._subscribers[obj](obj)
 
   def connect(self):
     """Connects to the Lutron controller to send and receive commands and status"""
@@ -436,26 +456,48 @@ class _RequestHelper(object):
     for ev in events:
       ev.set()
 
+# This describes the type signature of the callback that LutronEntity
+# subscribers must provide.
+LutronEventHandler = Callable[['LutronEntity', Any, 'LutronEvent', Dict], None]
+
+
+class LutronEvent(Enum):
+  """Base class for the events LutronEntity-derived objects can produce."""
+  pass
+
 
 class LutronEntity(object):
   """Base class for all the Lutron objects we'd like to manage. Just holds basic
   common info we'd rather not manage repeatedly."""
 
-  def __init__(self, lutron, name, integration_id):
+  def __init__(self, lutron, name):
     """Initializes the base class with common, basic data."""
     self._lutron = lutron
     self._name = name
-    self._integration_id = integration_id
+    self._subscribers = []
 
   @property
   def name(self):
     """Returns the entity name (e.g. Pendant)."""
     return self._name
 
-  @property
-  def id(self):
-    """The integration id"""
-    return self._integration_id
+  def _dispatch_event(self, event: LutronEvent, params: Dict):
+    """Dispatches the specified event to all the subscribers."""
+    for handler, context in self._subscribers:
+      handler(self, context, event, params)
+
+  def subscribe(self, handler: LutronEventHandler, context):
+    """Subscribes to events from this entity.
+
+    handler: A callable object that takes the following arguments (in order)
+             obj: the LutrongEntity object that generated the event
+             context: user-supplied (to subscribe()) context object
+             event: the LutronEvent that was generated.
+             params: a dict of event-specific parameters
+
+    context: User-supplied, opaque object that will be passed to handler.
+    """
+    self._subscribers.append((handler, context))
 
   def handle_update(self, args):
     """The handle_update callback is invoked when an event is received
@@ -471,18 +513,28 @@ class LutronEntity(object):
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
   switched/dimmed load, e.g. light fixture, outlet, etc."""
-  CMD_TYPE = 'OUTPUT'
-  ACTION_ZONE_LEVEL = 1
+  _CMD_TYPE = 'OUTPUT'
+  _ACTION_ZONE_LEVEL = 1
+
+  class Event(LutronEvent):
+    """Output events that can be generated.
+
+    LEVEL_CHANGED: The output level has changed.
+        Params:
+          level: new output level (float)
+    """
+    LEVEL_CHANGED = 1
 
   def __init__(self, lutron, name, watts, output_type, integration_id):
     """Initializes the Output."""
-    super(Output, self).__init__(lutron, name, integration_id)
+    super(Output, self).__init__(lutron, name)
     self._watts = watts
     self._output_type = output_type
     self._level = 0.0
     self._query_waiters = _RequestHelper()
+    self._integration_id = integration_id
 
-    self._lutron.register_id(Output.CMD_TYPE, self)
+    self._lutron.register_id(Output._CMD_TYPE, self)
 
   def __str__(self):
     """Returns a pretty-printed string for this object."""
@@ -494,24 +546,30 @@ class Output(LutronEntity):
     return str({'name': self._name, 'watts': self._watts,
                 'type': self._output_type, 'id': self._integration_id})
 
+  @property
+  def id(self):
+    """The integration id"""
+    return self._integration_id
+
   def handle_update(self, args):
     """Handles an event update for this object, e.g. dimmer level change."""
     _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
     state = int(args[0])
-    if state != Output.ACTION_ZONE_LEVEL:
+    if state != Output._ACTION_ZONE_LEVEL:
       return False
     level = float(args[1])
     _LOGGER.debug("Updating %d(%s): s=%d l=%f" % (
         self._integration_id, self._name, state, level))
     self._level = level
     self._query_waiters.notify()
+    self._dispatch_event(Output.Event.LEVEL_CHANGED, {'level': self._level})
     return True
 
   def __do_query_level(self):
     """Helper to perform the actual query the current dimmer level of the
     output. For pure on/off loads the result is either 0.0 or 100.0."""
-    self._lutron.send(Lutron.OP_QUERY, Output.CMD_TYPE, self._integration_id,
-            Output.ACTION_ZONE_LEVEL)
+    self._lutron.send(Lutron.OP_QUERY, Output._CMD_TYPE, self._integration_id,
+            Output._ACTION_ZONE_LEVEL)
 
   def last_level(self):
     """Returns last cached value of the output level, no query is performed."""
@@ -529,14 +587,14 @@ class Output(LutronEntity):
     """Sets the new output level."""
     if self._level == new_level:
       return
-    self._lutron.send(Lutron.OP_EXECUTE, Output.CMD_TYPE, self._integration_id,
-        Output.ACTION_ZONE_LEVEL, "%.2f" % new_level)
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level)
     self._level = new_level
 
 ## At some later date, we may want to also specify fade and delay times    
 #  def set_level(self, new_level, fade_time, delay):
-#    self._lutron.send(Lutron.OP_EXECUTE, Output.CMD_TYPE,
-#        Output.ACTION_ZONE_LEVEL, new_level, fade_time, delay)
+#    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
+#        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
 
   @property
   def watts(self):
@@ -555,23 +613,27 @@ class Output(LutronEntity):
     return self.type != 'NON_DIM' and not self.type.startswith('CCO_')
 
 
-class KeypadComponent(object):
+class KeypadComponent(LutronEntity):
   """Base class for a keypad component such as a button, or an LED."""
-  def __init__(self, lutron, keypad, name, component_num):
-    self._lutron = lutron
+
+  def __init__(self, lutron, keypad, name, num, component_num):
+    """Initializes the base keypad component class."""
+    super(KeypadComponent, self).__init__(lutron, name)
     self._keypad = keypad
-    self._name = name
+    self._num = num
     self._component_num = component_num
 
   @property
-  def name(self):
-    """Returns the name of the component."""
-    return self._name
+  def number(self):
+    """Returns the user-friendly number of this component (e.g. Button 1,
+    or LED 1."""
+    return self._num
 
   @property
   def component_number(self):
-    """Return the component number, which is referenced in commands and
-    events."""
+    """Return the lutron component number, which is referenced in commands and
+    events. This is different from KeypadComponent.number because this property
+    is only used for interfacing with the controller."""
     return self._component_num
 
   def handle_update(self, action, params):
@@ -584,9 +646,25 @@ class KeypadComponent(object):
 class Button(KeypadComponent):
   """This object represents a keypad button that we can trigger and handle
   events for (button presses)."""
+  _ACTION_PRESS = 3
+  _ACTION_RELEASE = 4
+
+  class Event(LutronEvent):
+    """Button events that can be generated.
+
+    PRESSED: The button has been pressed.
+        Params: None
+
+    RELEASED: The button has been released. Not all buttons
+              generate this event.
+        Params: None
+    """
+    PRESSED = 1
+    RELEASED = 2
+
   def __init__(self, lutron, keypad, name, num, button_type, direction):
-    super(Button, self).__init__(lutron, keypad, name, num)
-    self._num = num
+    """Initializes the Button class."""
+    super(Button, self).__init__(lutron, keypad, name, num, num)
     self._button_type = button_type
     self._direction = direction
 
@@ -601,52 +679,105 @@ class Button(KeypadComponent):
                'type': self._button_type, 'direction': self._direction})
 
   @property
-  def number(self):
-    """Returns the button number."""
-    return self._num
-
-  @property
   def button_type(self):
     """Returns the button type (Toggle, MasterRaiseLower, etc.)."""
     return self._button_type
+
+  def press(self):
+    """Triggers a simulated button press to the Keypad."""
+    self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
+                      self.component_number, Button._ACTION_PRESS)
+
+  def handle_update(self, action, params):
+    """Handle the specified action on this component."""
+    _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
+                  self._keypad.name, self, action, params))
+    ev_map = {
+        Button._ACTION_PRESS: Button.Event.PRESSED,
+        Button._ACTION_RELEASE: Button.Event.RELEASED
+    }
+    if action not in ev_map:
+      _LOGGER.debug("Unknown action %d for button %d in keypad %d" % (
+          action, self.number, self.keypad.name))
+      return False
+    self._dispatch_event(ev_map[action], {})
+    return True
 
 
 class Led(KeypadComponent):
   """This object represents a keypad LED that we can turn on/off and
   handle events for (led toggled by scenes)."""
+  _ACTION_LED_STATE = 9
+
+  class Event(LutronEvent):
+    """Led events that can be generated.
+
+    STATE_CHANGED: The button has been pressed.
+        Params:
+          state: The boolean value of the new LED state.
+    """
+    STATE_CHANGED = 1
+
   def __init__(self, lutron, keypad, name, led_num, component_num):
-    super(Led, self).__init__(lutron, keypad, name, component_num)
-    self._led_num = led_num
+    """Initializes the Keypad LED class."""
+    super(Led, self).__init__(lutron, keypad, name, led_num, component_num)
+    self._state = False
+    self._query_waiters = _RequestHelper()
 
   def __str__(self):
     """Pretty printed string value of the Led object."""
     return 'LED keypad: "%s" name: "%s" num: %d component_num: %d"' % (
-        self._keypad.name, self.name, self._led_num, self.component_number)
+        self._keypad.name, self.name, self.number, self.component_number)
 
   def __repr__(self):
     """String representation of the Led object."""
     return str({'keypad': self._keypad, 'name': self.name,
-                'num': self._led_num, 'component_num': self.component_number})
+                'num': self.number, 'component_num': self.component_number})
+
+  def __do_query_state(self):
+    """Helper to perform the actual query for the current LED state."""
+    self._lutron.send(Lutron.OP_QUERY, Keypad._CMD_TYPE, self._keypad.id,
+            self.component_number, Led._ACTION_LED_STATE)
 
   @property
-  def number(self):
-    """Returns the LED number."""
-    return self._led_num
-
-  @property
-  def component_number(self):
-    """Returns the LED component number."""
-    return self._component_num
+  def last_state(self):
+    """Returns last cached value of the LED state, no query is performed."""
+    return self._state
 
   @property
   def state(self):
     """Returns the current LED state by querying the remote controller."""
-    return None
+    ev = self._query_waiters.request(self.__do_query_state)
+    ev.wait(1.0)
+    return self._state
 
   @state.setter
-  def state(self, new_state):
-    """Sets the new output level."""
-    return
+  def state(self, new_state: bool):
+    """Sets the new led state.
+
+    new_state: bool
+    """
+    self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
+                      self.component_number, Led._ACTION_LED_STATE,
+                      int(new_state))
+    self._state = new_state
+
+  def handle_update(self, action, params):
+    """Handle the specified action on this component."""
+    _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
+                  self._keypad.name, self, action, params))
+    if action != Led._ACTION_LED_STATE:
+      _LOGGER.debug("Unknown action %d for led %d in keypad %d" % (
+          action, self.number, self.keypad.name))
+      return False
+    elif len(params) < 1:
+      _LOGGER.debug("Unknown params %s (action %d on led %d in keypad %d)" % (
+          params, action, self.number, self.keypad.name))
+      return False
+    self._state = bool(params[0])
+    self._query_waiters.notify()
+    self._dispatch_event(Led.Event.STATE_CHANGED, {'state': self._state})
+    return True
 
 
 class Keypad(LutronEntity):
@@ -655,15 +786,17 @@ class Keypad(LutronEntity):
   Currently we don't really do much with it except handle the events
   (and drop them on the floor).
   """
-  CMD_TYPE = 'DEVICE'
+  _CMD_TYPE = 'DEVICE'
 
   def __init__(self, lutron, name, integration_id):
     """Initializes the Keypad object."""
-    super(Keypad, self).__init__(lutron, name, integration_id)
+    super(Keypad, self).__init__(lutron, name)
     self._buttons = []
     self._leds = []
     self._components = {}
-    self._lutron.register_id(Keypad.CMD_TYPE, self)
+    self._integration_id = integration_id
+
+    self._lutron.register_id(Keypad._CMD_TYPE, self)
 
   def add_button(self, button):
     """Adds a button that's part of this keypad. We'll use this to
@@ -675,6 +808,11 @@ class Keypad(LutronEntity):
     """Add an LED that's part of this keypad."""
     self._leds.append(led)
     self._components[led.component_number] = led
+
+  @property
+  def id(self):
+    """The integration id"""
+    return self._integration_id
 
   @property
   def name(self):
