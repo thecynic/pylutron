@@ -97,7 +97,7 @@ class LutronConnection(threading.Thread):
   def _maybe_reconnect(self):
     """Reconnects to the controller if we have been previously disconnected."""
     with self._lock:
-      if not self._connected: 
+      if not self._connected:
         _LOGGER.info("Connecting")
         self._lock.release()
         try:
@@ -158,7 +158,7 @@ class LutronXmlDbParser(object):
     areas = top_area.find('Areas')
     for area_xml in areas.getiterator('Area'):
       area = self._parse_area(area_xml)
-      self.areas.append(area)      
+      self.areas.append(area)
     return True
 
   def _parse_area(self, area_xml):
@@ -494,7 +494,7 @@ class Output(LutronEntity):
         Output.ACTION_ZONE_LEVEL, "%.2f" % new_level)
     self._level = new_level
 
-## At some later date, we may want to also specify fade and delay times    
+## At some later date, we may want to also specify fade and delay times
 #  def set_level(self, new_level, fade_time, delay):
 #    self._lutron.send(Lutron.OP_EXECUTE, Output.CMD_TYPE,
 #        Output.ACTION_ZONE_LEVEL, new_level, fade_time, delay)
@@ -554,7 +554,7 @@ class Button(object):
 
 class Keypad(LutronEntity):
   """Object representing a Lutron keypad.
-  
+
   Currently we don't really do much with it except handle the events
   (and drop them on the floor).
   """
@@ -588,7 +588,7 @@ class Keypad(LutronEntity):
 
 class MotionSensor(object):
   """Placeholder class for the motion sensor device.
-  
+
   TODO: Actually implement this.
   """
   def __init__(self, lutron, name, integration_id):
