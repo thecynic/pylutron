@@ -118,7 +118,10 @@ class LutronConnection(threading.Thread):
       except EOFError:
         self._disconnect()
         continue
-      self._recv_cb(line.decode('ascii').rstrip())
+      # Although we turn off the prompt in _do_login() it seems buggy repeater Firmware allows
+      # the PROMPT to sometimes slip in. Remove it before parsing.
+      line = line.decode('ascii').replace(LutronConnection.PROMPT.decode('ascii'),'').rstrip()
+      self._recv_cb(line)
 
 
 class LutronXmlDbParser(object):
