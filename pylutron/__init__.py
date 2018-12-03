@@ -861,16 +861,19 @@ class OccupancyGroup(LutronEntity):
   _CMD_TYPE = 'GROUP'
   _ACTION_STATE = 3
 
-  OCCUPIED = 3
-  VACANT = 4
-  UNKNOWN = 255
+  class State(Enum):
+    """Possible states of an OccupancyGroup."""
+    UNSET = 0
+    OCCUPIED = 3
+    VACANT = 4
+    UNKNOWN = 255
 
   class Event(LutronEvent):
     """OccupancyGroup event that can be generated.
 
     OCCUPANCY_CHANGED: Occupancy state has changed.
         Params:
-          state: One of OCCUPIED/VACANT/UNKNOWN
+          state: an OccupancyGroup.State
     """
     OCCUPANCY = 1
 
@@ -878,7 +881,7 @@ class OccupancyGroup(LutronEntity):
     super(OccupancyGroup, self).__init__(lutron, 'Occ {}'.format(area.name))
     self._area = area
     self._integration_id = area.id
-    self._state = OccupancyGroup.UNKNOWN
+    self._state = OccupancyGroup.State.UNSET
     self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
     self._query_waiters = _RequestHelper()
 
@@ -896,20 +899,15 @@ class OccupancyGroup(LutronEntity):
   def state(self):
     """Returns the current occupancy state."""
     # Poll for the first request.
-    ev = self._query_waiters.request(self._do_query_state)
-    ev.wait(1.0)
+    if self._state == OccupancyGroup.State.UNSET:
+      ev = self._query_waiters.request(self._do_query_state)
+      ev.wait(1.0)
     return self._state
 
   def __str__(self):
     """Returns a pretty-printed string for this object."""
-    state_map = {
-      OccupancyGroup.OCCUPIED : 'occupied',
-      OccupancyGroup.VACANT : 'vacant',
-      OccupancyGroup.UNKNOWN : 'unknown',
-    }
-    state_str = state_map[self.state]
     return 'OccupancyGroup for Area "{}" Id: {} State: {}'.format(
-      self._area.name, self.id, state_str)
+      self._area.name, self.id, self.state.name)
 
   def __repr__(self):
     """Returns a stringified representation of this object."""
@@ -928,7 +926,7 @@ class OccupancyGroup(LutronEntity):
     action = int(args[0])
     if action != OccupancyGroup._ACTION_STATE or len(args) != 2:
       return False
-    self._state = int(args[1])
+    self._state = OccupancyGroup.State(int(args[1]))
     self._query_waiters.notify()
     self._dispatch_event(OccupancyGroup.Event.OCCUPANCY, {'state': self._state})
     return True
