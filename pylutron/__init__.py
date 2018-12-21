@@ -1102,6 +1102,7 @@ class OccupancyGroup(LutronEntity):
 
 
 class OccupancyGroup(LutronEntity):
+  """Represents one or more occupancy/vacancy sensors grouped into an Area."""
   _CMD_TYPE = 'GROUP'
   _ACTION_STATE = 3
 
