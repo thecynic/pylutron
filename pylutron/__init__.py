@@ -87,6 +87,7 @@ class LutronConnection(threading.Thread):
 
     Must not hold self._lock.
     """
+    self._maybe_reconnect()
     with self._lock:
       self._send_locked(cmd)
 
