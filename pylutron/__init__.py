@@ -242,7 +242,7 @@ class LutronXmlDbParser(object):
                     name=keypad_xml.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')))
     components = keypad_xml.find('Components')
-    if not components:
+    if components is None:
       return keypad
     for comp in components:
       if comp.tag != 'Component':
