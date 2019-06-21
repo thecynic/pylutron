@@ -118,7 +118,7 @@ class LutronConnection(threading.Thread):
   def _maybe_reconnect(self):
     """Reconnects to the controller if we have been previously disconnected."""
     with self._lock:
-      if not self._connected: 
+      if not self._connected:
         _LOGGER.info("Connecting")
         self._do_login_locked()
         self._connected = True
@@ -186,7 +186,7 @@ class LutronXmlDbParser(object):
     areas = top_area.find('Areas')
     for area_xml in areas.getiterator('Area'):
       area = self._parse_area(area_xml)
-      self.areas.append(area)      
+      self.areas.append(area)
     return True
 
   def _parse_area(self, area_xml):
@@ -217,7 +217,8 @@ class LutronXmlDbParser(object):
             'SEETOUCH_TABLETOP_KEYPAD',
             'PICO_KEYPAD',
             'HYBRID_SEETOUCH_KEYPAD',
-            'MAIN_REPEATER'):
+            'MAIN_REPEATER',
+            'HOMEOWNER_KEYPAD'):
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
@@ -243,7 +244,7 @@ class LutronXmlDbParser(object):
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')))
     components = keypad_xml.find('Components')
-    if not components:
+    if components is None:
       return keypad
     for comp in components:
       if comp.tag != 'Component':
@@ -593,7 +594,7 @@ class Output(LutronEntity):
         Output._ACTION_ZONE_LEVEL, "%.2f" % new_level)
     self._level = new_level
 
-## At some later date, we may want to also specify fade and delay times    
+## At some later date, we may want to also specify fade and delay times
 #  def set_level(self, new_level, fade_time, delay):
 #    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
 #        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
@@ -700,7 +701,7 @@ class Button(KeypadComponent):
     }
     if action not in ev_map:
       _LOGGER.debug("Unknown action %d for button %d in keypad %d" % (
-          action, self.number, self.keypad.name))
+          action, self.number, self._keypad.name))
       return False
     self._dispatch_event(ev_map[action], {})
     return True
@@ -770,11 +771,11 @@ class Led(KeypadComponent):
                   self._keypad.name, self, action, params))
     if action != Led._ACTION_LED_STATE:
       _LOGGER.debug("Unknown action %d for led %d in keypad %d" % (
-          action, self.number, self.keypad.name))
+          action, self.number, self._keypad.name))
       return False
     elif len(params) < 1:
       _LOGGER.debug("Unknown params %s (action %d on led %d in keypad %d)" % (
-          params, action, self.number, self.keypad.name))
+          params, action, self.number, self._keypad.name))
       return False
     self._state = bool(params[0])
     self._query_waiters.notify()
@@ -784,7 +785,7 @@ class Led(KeypadComponent):
 
 class Keypad(LutronEntity):
   """Object representing a Lutron keypad.
-  
+
   Currently we don't really do much with it except handle the events
   (and drop them on the floor).
   """
@@ -851,7 +852,7 @@ class Keypad(LutronEntity):
 
 class MotionSensor(object):
   """Placeholder class for the motion sensor device.
-  
+
   TODO: Actually implement this.
   """
   def __init__(self, lutron, name, integration_id):
@@ -911,4 +912,3 @@ class Area(object):
   def sensors(self):
     """Return the tuple of the MotionSensors from this area."""
     return tuple(sensor for sensor in self._sensors)
-
