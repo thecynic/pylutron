@@ -219,7 +219,7 @@ class LutronXmlDbParser(object):
             'HYBRID_SEETOUCH_KEYPAD',
             'MAIN_REPEATER',
             'HOMEOWNER_KEYPAD'):
-          keypad = self._parse_keypad(device_xml)
+          keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
           motion_sensor = self._parse_motion_sensor(device_xml)
@@ -237,10 +237,11 @@ class LutronXmlDbParser(object):
                     integration_id=int(output_xml.get('IntegrationID')))
     return output
 
-  def _parse_keypad(self, keypad_xml):
+  def _parse_keypad(self, keypad_xml, device_group):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
     keypad = Keypad(self._lutron,
                     name=keypad_xml.get('Name'),
+                    location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')))
     components = keypad_xml.find('Components')
     if components is None:
@@ -790,12 +791,13 @@ class Keypad(LutronEntity):
   """
   _CMD_TYPE = 'DEVICE'
 
-  def __init__(self, lutron, name, integration_id):
+  def __init__(self, lutron, name, location, integration_id):
     """Initializes the Keypad object."""
     super(Keypad, self).__init__(lutron, name)
     self._buttons = []
     self._leds = []
     self._components = {}
+    self._location = location
     self._integration_id = integration_id
 
     self._lutron.register_id(Keypad._CMD_TYPE, self)
@@ -820,6 +822,11 @@ class Keypad(LutronEntity):
   def name(self):
     """Returns the name of this keypad"""
     return self._name
+
+  @property
+  def location(self):
+    """Returns the location in which the keypad is installed"""
+    return self._location
 
   @property
   def buttons(self):
