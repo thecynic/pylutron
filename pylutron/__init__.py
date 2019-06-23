@@ -901,7 +901,6 @@ class MotionSensor(LutronEntity):
     self._lutron.register_id(MotionSensor._CMD_TYPE, self)
     self._query_waiters = _RequestHelper()
     self._last_update = None
-<<<<<<< HEAD
 
   @property
   def id(self):
