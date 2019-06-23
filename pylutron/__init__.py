@@ -882,11 +882,7 @@ class MotionSensor(LutronEntity):
   class Event(LutronEvent):
     """MotionSensor events that can be generated.
 
-<<<<<<< HEAD
     STATUS_CHANGED: Battery status changed
-=======
-    BATTERY_STATUS_CHANGED: Battery status changed
->>>>>>> Add OccupancyGroup tracking and report motion sensor battery
         Params:
           power: PowerSource
           battery: BatteryStatus
@@ -905,7 +901,6 @@ class MotionSensor(LutronEntity):
     self._lutron.register_id(MotionSensor._CMD_TYPE, self)
     self._query_waiters = _RequestHelper()
     self._last_update = None
-<<<<<<< HEAD
 
   @property
   def id(self):
@@ -1057,7 +1052,7 @@ class OccupancyGroup(LutronEntity):
   def _update_age(self):
     """Returns the time of the last poll in seconds."""
     if self._last_update is None:
-      return 1e6
+      return float('inf')
     else:
       return time.time() - self._last_update
 
@@ -1074,12 +1069,12 @@ class OccupancyGroup(LutronEntity):
   @property
   def power_source(self):
     """Returns the current PowerSource."""
-    self.battery_status  # retrieved by the same query
+    _ = self.battery_status  # retrieved by the same query
     return self._power
 
   def _do_query_battery(self):
     """Helper to perform the query for the current BatteryStatus."""
-    component_num = 1  # doesn't seem to matter
+    component_num = 2  # doesn't seem to matter
     return self._lutron.send(Lutron.OP_QUERY, MotionSensor._CMD_TYPE, self._integration_id,
                              component_num, MotionSensor._ACTION_BATTERY_STATUS)
 
@@ -1173,13 +1168,19 @@ class OccupancyGroup(LutronEntity):
     if action != OccupancyGroup._ACTION_STATE or len(args) != 2:
       return False
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> apply fixes from pull request
     try:
       self._state = OccupancyGroup.State(int(args[1]))
     except ValueError:
       self._state = OccupancyGroup.State.UNKNOWN
+<<<<<<< HEAD
 =======
     self._state = OccupancyGroup.State(int(args[1]))
 >>>>>>> Add OccupancyGroup tracking and report motion sensor battery
+=======
+>>>>>>> apply fixes from pull request
     self._query_waiters.notify()
     self._dispatch_event(OccupancyGroup.Event.OCCUPANCY, {'state': self._state})
     return True
