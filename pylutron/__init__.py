@@ -324,8 +324,11 @@ class Lutron(object):
     self._conn.send(op + out_cmd)
 
   def load_xml_db(self, cache_path=None):
-    """Load the Lutron database from the server. If a locally cached copy is
-    available, use that instead."""
+    """Load the Lutron database from the server.
+
+    If a locally cached copy is available, use that instead.
+    """
+
     xml_db = None
     loaded_from = None
     if cache_path:
