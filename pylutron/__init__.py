@@ -846,7 +846,6 @@ class Keypad(LutronEntity):
 class PowerSource(Enum):
   """Enum values representing power source, reported by queries to
   battery-powered devices."""
-  UNSET = -1
   
   # Values from ?HELP,?DEVICE,22
   UNKNOWN = 0
@@ -857,7 +856,6 @@ class PowerSource(Enum):
 class BatteryStatus(Enum):
   """Enum values representing battery state, reported by queries to
   battery-powered devices."""
-  UNSET = -1
   
   # Values from ?HELP,?DEVICE,22 don't match the documentation, using what's in the doc.
   #?HELP says:
@@ -893,8 +891,8 @@ class MotionSensor(LutronEntity):
     """Initializes the motion sensor object."""
     super(MotionSensor, self).__init__(lutron, name)
     self._integration_id = integration_id
-    self._battery = BatteryStatus.UNSET
-    self._power = PowerSource.UNSET
+    self._battery = None
+    self._power = None
     self._lutron.register_id(MotionSensor._CMD_TYPE, self)
     self._query_waiters = _RequestHelper()
     self._last_update = None
@@ -907,7 +905,7 @@ class MotionSensor(LutronEntity):
   def __str__(self):
     """Returns a pretty-printed string for this object."""
     return 'MotionSensor {} Id: {} Battery: {} Power: {}'.format(
-      self.name, self.id, self.battery_status, self.power_source)
+        self.name, self.id, self.battery_status, self.power_source)
 
   def __repr__(self):
     """String representation of the MotionSensor object."""
@@ -970,7 +968,6 @@ class OccupancyGroup(LutronEntity):
 
   class State(Enum):
     """Possible states of an OccupancyGroup."""
-    UNSET = 0
     OCCUPIED = 3
     VACANT = 4
     UNKNOWN = 255
@@ -987,7 +984,7 @@ class OccupancyGroup(LutronEntity):
     super(OccupancyGroup, self).__init__(lutron, 'Occ {}'.format(area.name))
     self._area = area
     self._integration_id = area.id
-    self._state = OccupancyGroup.State.UNSET
+    self._state = None
     self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
     self._query_waiters = _RequestHelper()
 
@@ -1005,7 +1002,7 @@ class OccupancyGroup(LutronEntity):
   def state(self):
     """Returns the current occupancy state."""
     # Poll for the first request.
-    if self._state == OccupancyGroup.State.UNSET:
+    if self._state == None:
       ev = self._query_waiters.request(self._do_query_state)
       ev.wait(1.0)
     return self._state
@@ -1013,7 +1010,7 @@ class OccupancyGroup(LutronEntity):
   def __str__(self):
     """Returns a pretty-printed string for this object."""
     return 'OccupancyGroup for Area "{}" Id: {} State: {}'.format(
-      self._area.name, self.id, self.state.name)
+        self._area.name, self.id, self.state.name)
 
   def __repr__(self):
     """Returns a stringified representation of this object."""
