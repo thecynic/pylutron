@@ -955,6 +955,7 @@ class MotionSensor(LutronEntity):
       return False
     self._power = PowerSource(int(power))
     self._battery = BatteryStatus(int(battery))
+    self._last_update = time.time()
     self._query_waiters.notify()
     self._dispatch_event(
       MotionSensor.Event.STATUS_CHANGED, {'power' : self._power, 'battery': self._battery})
