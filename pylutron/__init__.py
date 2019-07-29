@@ -241,6 +241,7 @@ class LutronXmlDbParser(object):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
     keypad = Keypad(self._lutron,
                     name=keypad_xml.get('Name'),
+                    keypad_type=keypad_xml.get('DeviceType'),
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')))
     components = keypad_xml.find('Components')
@@ -279,7 +280,10 @@ class LutronXmlDbParser(object):
   def _parse_led(self, keypad, component_xml):
     """Parses an LED device that part of a keypad."""
     component_num = int(component_xml.get('ComponentNumber'))
-    led_num = component_num - 80
+    led_base = 80
+    if keypad.type == 'MAIN_REPEATER':
+      led_base = 100
+    led_num = component_num - led_base
     led = Led(self._lutron, keypad,
               name=('LED %d' % led_num),
               led_num=led_num,
@@ -810,7 +814,7 @@ class Keypad(LutronEntity):
   """
   _CMD_TYPE = 'DEVICE'
 
-  def __init__(self, lutron, name, location, integration_id):
+  def __init__(self, lutron, name, keypad_type, location, integration_id):
     """Initializes the Keypad object."""
     super(Keypad, self).__init__(lutron, name)
     self._buttons = []
@@ -818,6 +822,7 @@ class Keypad(LutronEntity):
     self._components = {}
     self._location = location
     self._integration_id = integration_id
+    self._type = keypad_type
 
     self._lutron.register_id(Keypad._CMD_TYPE, self)
 
@@ -841,6 +846,11 @@ class Keypad(LutronEntity):
   def name(self):
     """Returns the name of this keypad"""
     return self._name
+
+  @property
+  def type(self):
+    """Returns the keypad type"""
+    return self._type
 
   @property
   def location(self):
