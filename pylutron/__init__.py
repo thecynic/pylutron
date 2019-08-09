@@ -42,7 +42,7 @@ class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
-  PROMPT = b'GNET> '
+  PROMPT = b'> '
 
   def __init__(self, host, user, password, recv_callback):
     """Initializes the lutron connection, doesn't actually connect."""
@@ -57,6 +57,7 @@ class LutronConnection(threading.Thread):
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
     self._done = False
+    self._controller = '*UNKNOWN*'
 
     self.setDaemon(True)
 
@@ -98,7 +99,15 @@ class LutronConnection(threading.Thread):
     self._telnet.write(self._user + b'\r\n')
     self._telnet.read_until(LutronConnection.PW_PROMPT)
     self._telnet.write(self._password + b'\r\n')
-    self._telnet.read_until(LutronConnection.PROMPT)
+    self._telnet.read_until(b'\n')
+    prompt = self._telnet.read_until(LutronConnection.PROMPT)
+    if prompt == b'QNET> ':
+        self._controller = 'HomeWorks'
+    elif prompt == b'GNET> ':
+        self._controller = 'RadioRA'
+    else:
+        _LOGGER.warning("unsupported lutron prompt: %s", prompt)
+    _LOGGER.info("Identified Lutron %s", self._controller)
 
     self._send_locked("#MONITORING,12,2")
     self._send_locked("#MONITORING,255,2")
