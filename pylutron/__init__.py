@@ -9,6 +9,7 @@ __copyright__ = "Copyright 2016, Dima Zavin"
 
 from enum import Enum
 import logging
+import socket
 import telnetlib
 import threading
 import time
@@ -79,7 +80,7 @@ class LutronConnection(threading.Thread):
     _LOGGER.debug("Sending: %s" % cmd)
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
-    except BrokenPipeError:
+    except (BrokenPipeError, TimeoutError, OSError, AttributeError):
       self._disconnect_locked()
 
   def send(self, cmd):
@@ -88,17 +89,34 @@ class LutronConnection(threading.Thread):
     Must not hold self._lock.
     """
     with self._lock:
+      if not self._connected:
+        _LOGGER.debug("Ignoring send of '%s' beause we are disconnected." % cmd)
+        return
       self._send_locked(cmd)
 
   def _do_login_locked(self):
     """Executes the login procedure (telnet) as well as setting up some
     connection defaults like turning off the prompt, etc."""
-    self._telnet = telnetlib.Telnet(self._host)
-    self._telnet.read_until(LutronConnection.USER_PROMPT)
+    self._telnet = telnetlib.Telnet(self._host, timeout=2)  # 2 second timeout
+
+    # Ensure we know that connection goes away somewhat quickly
+    try:
+      sock = self._telnet.get_socket()
+      sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+      # Send keepalive probes after 60 seconds of inactivity
+      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+      # Wait 10 seconds for an ACK
+      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+      # Send 3 probes before we give up
+      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+    except OSError:
+      pass
+
+    self._telnet.read_until(LutronConnection.USER_PROMPT, timeout=3)
     self._telnet.write(self._user + b'\r\n')
-    self._telnet.read_until(LutronConnection.PW_PROMPT)
+    self._telnet.read_until(LutronConnection.PW_PROMPT, timeout=3)
     self._telnet.write(self._password + b'\r\n')
-    self._telnet.read_until(LutronConnection.PROMPT)
+    self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
 
     self._send_locked("#MONITORING,12,2")
     self._send_locked("#MONITORING,255,2")
@@ -120,6 +138,7 @@ class LutronConnection(threading.Thread):
     with self._lock:
       if not self._connected:
         _LOGGER.info("Connecting")
+        # This can throw an exception, but we'll catch it in run()
         self._do_login_locked()
         self._connected = True
         self._connect_cond.notify_all()
@@ -129,17 +148,19 @@ class LutronConnection(threading.Thread):
     """Main thread function to maintain connection and receive remote status."""
     _LOGGER.info("Started")
     while True:
-      self._maybe_reconnect()
-      line = ''
+      line = b''
       try:
+        self._maybe_reconnect()
         # If someone is sending a command, we can lose our connection so grab a
         # copy beforehand. We don't need the lock because if the connection is
         # open, we are the only ones that will read from telnet (the reconnect
         # code runs synchronously in this loop).
         t = self._telnet
         if t is not None:
-          line = t.read_until(b"\n")
-      except EOFError:
+          line = t.read_until(b"\n", timeout=3)
+        else:
+          raise EOFError('Telnet object already torn down')
+      except (EOFError, TimeoutError, socket.timeout, AttributeError):
         try:
           self._lock.acquire()
           self._disconnect_locked()
