@@ -744,7 +744,7 @@ class Button(KeypadComponent):
         Button._ACTION_RELEASE: Button.Event.RELEASED
     }
     if action not in ev_map:
-      _LOGGER.debug("Unknown action %d for button %d in keypad %d" % (
+      _LOGGER.debug("Unknown action %d for button %d in keypad %s" % (
           action, self.number, self._keypad.name))
       return False
     self._dispatch_event(ev_map[action], {})
@@ -814,11 +814,11 @@ class Led(KeypadComponent):
     _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
                   self._keypad.name, self, action, params))
     if action != Led._ACTION_LED_STATE:
-      _LOGGER.debug("Unknown action %d for led %d in keypad %d" % (
+      _LOGGER.debug("Unknown action %d for led %d in keypad %s" % (
           action, self.number, self._keypad.name))
       return False
     elif len(params) < 1:
-      _LOGGER.debug("Unknown params %s (action %d on led %d in keypad %d)" % (
+      _LOGGER.debug("Unknown params %s (action %d on led %d in keypad %s)" % (
           params, action, self.number, self._keypad.name))
       return False
     self._state = bool(params[0])
