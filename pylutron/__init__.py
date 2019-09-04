@@ -148,26 +148,30 @@ class LutronConnection(threading.Thread):
     """Main thread function to maintain connection and receive remote status."""
     _LOGGER.info("Started")
     while True:
-      line = b''
       try:
-        self._maybe_reconnect()
-        # If someone is sending a command, we can lose our connection so grab a
-        # copy beforehand. We don't need the lock because if the connection is
-        # open, we are the only ones that will read from telnet (the reconnect
-        # code runs synchronously in this loop).
-        t = self._telnet
-        if t is not None:
-          line = t.read_until(b"\n", timeout=3)
-        else:
-          raise EOFError('Telnet object already torn down')
-      except (EOFError, TimeoutError, socket.timeout, AttributeError):
+        line = b''
         try:
-          self._lock.acquire()
-          self._disconnect_locked()
-          continue
-        finally:
-          self._lock.release()
-      self._recv_cb(line.decode('ascii').rstrip())
+          self._maybe_reconnect()
+          # If someone is sending a command, we can lose our connection so grab a
+          # copy beforehand. We don't need the lock because if the connection is
+          # open, we are the only ones that will read from telnet (the reconnect
+          # code runs synchronously in this loop).
+          t = self._telnet
+          if t is not None:
+            line = t.read_until(b"\n", timeout=3)
+          else:
+            raise EOFError('Telnet object already torn down')
+        except (EOFError, TimeoutError, socket.timeout, AttributeError):
+          try:
+            self._lock.acquire()
+            self._disconnect_locked()
+            continue
+          finally:
+            self._lock.release()
+        self._recv_cb(line.decode('ascii').rstrip())
+      except Exception:
+        _LOGGER.exception("Uncaught exception")
+        raise
 
 
 class LutronXmlDbParser(object):
