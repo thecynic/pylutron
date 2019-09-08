@@ -144,34 +144,44 @@ class LutronConnection(threading.Thread):
         self._connect_cond.notify_all()
         _LOGGER.info("Connected")
 
-  def run(self):
-    """Main thread function to maintain connection and receive remote status."""
-    _LOGGER.info("Started")
+  def _main_loop(self):
+    """Main body of the the thread function.
+
+    This will maintain connection and receive remote status updates.
+    """
     while True:
+      line = b''
       try:
-        line = b''
+        self._maybe_reconnect()
+        # If someone is sending a command, we can lose our connection so grab a
+        # copy beforehand. We don't need the lock because if the connection is
+        # open, we are the only ones that will read from telnet (the reconnect
+        # code runs synchronously in this loop).
+        t = self._telnet
+        if t is not None:
+          line = t.read_until(b"\n", timeout=3)
+        else:
+          raise EOFError('Telnet object already torn down')
+      except (EOFError, TimeoutError, socket.timeout, AttributeError):
         try:
-          self._maybe_reconnect()
-          # If someone is sending a command, we can lose our connection so grab a
-          # copy beforehand. We don't need the lock because if the connection is
-          # open, we are the only ones that will read from telnet (the reconnect
-          # code runs synchronously in this loop).
-          t = self._telnet
-          if t is not None:
-            line = t.read_until(b"\n", timeout=3)
-          else:
-            raise EOFError('Telnet object already torn down')
-        except (EOFError, TimeoutError, socket.timeout, AttributeError):
-          try:
-            self._lock.acquire()
-            self._disconnect_locked()
-            continue
-          finally:
-            self._lock.release()
-        self._recv_cb(line.decode('ascii').rstrip())
-      except Exception:
-        _LOGGER.exception("Uncaught exception")
-        raise
+          self._lock.acquire()
+          self._disconnect_locked()
+          continue
+        finally:
+          self._lock.release()
+      self._recv_cb(line.decode('ascii').rstrip())
+
+  def run(self):
+    """Main entry point into our receive thread.
+
+    It just wraps _main_loop() so we can catch exceptions.
+    """
+    _LOGGER.info("Started")
+    try:
+      self._main_loop()
+    except Exception:
+      _LOGGER.exception("Uncaught exception")
+      raise
 
 
 class LutronXmlDbParser(object):
