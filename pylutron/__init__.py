@@ -749,6 +749,16 @@ class Button(KeypadComponent):
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
                       self.component_number, Button._ACTION_PRESS)
 
+  def release(self):
+    """Triggers a simulated button release to the Keypad."""
+    self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
+                      self.component_number, Button._ACTION_RELEASE)
+
+  def tap(self):
+    """Triggers a simulated button tap to the Keypad."""
+    self.press()
+    self.release()
+
   def handle_update(self, action, params):
     """Handle the specified action on this component."""
     _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
