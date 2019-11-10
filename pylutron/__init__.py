@@ -378,6 +378,7 @@ class LutronXmlDbParser(object):
     58: (3, None),    # Column 3 Raise
   }
 
+
 class Lutron(object):
   """Main Lutron Controller class.
 
