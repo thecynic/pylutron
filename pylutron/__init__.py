@@ -253,7 +253,8 @@ class LutronXmlDbParser(object):
             'PICO_KEYPAD',
             'HYBRID_SEETOUCH_KEYPAD',
             'MAIN_REPEATER',
-            'HOMEOWNER_KEYPAD'):
+            'HOMEOWNER_KEYPAD',
+            'GRAFIK_EYE_QS'):
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
@@ -300,14 +301,23 @@ class LutronXmlDbParser(object):
     name = button_xml.get('Engraving')
     button_type = button_xml.get('ButtonType')
     direction = button_xml.get('Direction')
+    button_id = int(component_xml.get('ComponentNumber'))
+
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
       name = 'Dimmer ' + direction
     if not name:
       name = "Unknown Button"
+    elif keypad.type == "GRAFIK_EYE_QS":
+      # Prepend column because shade columns tend to have repeated names
+      if button_id in self._GRAFIK_EYE_QS_COMPONENTS:
+        button_column = self._GRAFIK_EYE_QS_COMPONENTS[button_id][0]
+        if button_column is not None:
+          name = "Column" + str(button_column) + " " + name
+
     button = Button(self._lutron, keypad,
                     name=name,
-                    num=int(component_xml.get('ComponentNumber')),
+                    num=button_id,
                     button_type=button_type,
                     direction=direction)
     return button
@@ -315,10 +325,16 @@ class LutronXmlDbParser(object):
   def _parse_led(self, keypad, component_xml):
     """Parses an LED device that part of a keypad."""
     component_num = int(component_xml.get('ComponentNumber'))
-    led_base = 80
     if keypad.type == 'MAIN_REPEATER':
-      led_base = 100
-    led_num = component_num - led_base
+      led_num = component_num - 100
+    elif keypad.type == "GRAFIK_EYE_QS":
+      for button_id, button_info in self._GRAFIK_EYE_QS_COMPONENTS.items():
+        if component_num == button_info[1]:
+          led_num = button_id
+          break
+    else:
+      led_num = component_num - 80
+
     led = Led(self._lutron, keypad,
               name=('LED %d' % led_num),
               led_num=led_num,
@@ -337,6 +353,30 @@ class LutronXmlDbParser(object):
                         name=sensor_xml.get('Name'),
                         integration_id=int(sensor_xml.get('IntegrationID')))
 
+  _GRAFIK_EYE_QS_COMPONENTS = {
+    # http://www.lutron.com/TechnicalDocumentLibrary/Grafik_QS_Complete.pdf
+    # Component ID => (Column No, LED ID)
+    70: (None, 201),  # Scene 1
+    71: (None, 210),  # Scene 2
+    76: (None, 219),  # Scene 3
+    77: (None, 228),  # Scene 4
+    83: (None, 237),  # Scene Off
+    38: (1, 174),     # Column 1 Open
+    39: (1, 175),     # Column 1 Preset
+    40: (1, 211),     # Column 1 Close
+    41: (1, None),    # Column 1 Lower
+    47: (1, None),    # Column 1 Raise
+    44: (2, 183),     # Column 2 Open
+    45: (2, 184),     # Column 2 Preset
+    46: (2, 220),     # Column 2 Close
+    52: (2, None),    # Column 2 Lower
+    53: (2, None),    # Column 2 Raise
+    50: (3, 192),     # Column 3 Open
+    51: (3, 193),     # Column 3 Preset
+    56: (3, 229),     # Column 3 Close
+    57: (3, None),    # Column 3 Lower
+    58: (3, None),    # Column 3 Raise
+  }
 
 class Lutron(object):
   """Main Lutron Controller class.
