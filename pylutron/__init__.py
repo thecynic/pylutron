@@ -80,7 +80,7 @@ class LutronConnection(threading.Thread):
     _LOGGER.debug("Sending: %s" % cmd)
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
-    except (BrokenPipeError, TimeoutError, OSError, AttributeError):
+    except (BrokenPipeError, TimeoutError, OSError):
       self._disconnect_locked()
 
   def send(self, cmd):
@@ -103,8 +103,9 @@ class LutronConnection(threading.Thread):
     try:
       sock = self._telnet.get_socket()
       sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-      # Send keepalive probes after 60 seconds of inactivity
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+      if hasattr(socket, 'TCP_KEEPIDLE'):
+        # Send keepalive probes after 60 seconds of inactivity
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
       # Wait 10 seconds for an ACK
       sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
       # Send 3 probes before we give up
@@ -162,10 +163,12 @@ class LutronConnection(threading.Thread):
           line = t.read_until(b"\n", timeout=3)
         else:
           raise EOFError('Telnet object already torn down')
-      except (EOFError, TimeoutError, socket.timeout, AttributeError):
+      except (EOFError, TimeoutError, socket.timeout):
         try:
           self._lock.acquire()
           self._disconnect_locked()
+          # don't spam reconnect
+          time.sleep(1)
           continue
         finally:
           self._lock.release()
