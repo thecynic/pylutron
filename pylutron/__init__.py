@@ -163,7 +163,8 @@ class LutronConnection(threading.Thread):
           line = t.read_until(b"\n", timeout=3)
         else:
           raise EOFError('Telnet object already torn down')
-      except (EOFError, TimeoutError, socket.timeout):
+      # OSError: [Errno 101] Network unreachable
+      except (OSError, EOFError, TimeoutError, socket.timeout):
         try:
           self._lock.acquire()
           self._disconnect_locked()
