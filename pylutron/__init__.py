@@ -18,6 +18,17 @@ from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
 
+# We brute force exception handling in a number of areas to ensure
+# connections can be recovered
+_KNOWN_EXCEPTIONS = (
+  BrokenPipeError,
+  # OSError: [Errno 101] Network unreachable
+  OSError,
+  EOFError,
+  TimeoutError,
+  socket.timeout,
+)
+
 class LutronException(Exception):
   """Top level module exception."""
   pass
@@ -80,7 +91,7 @@ class LutronConnection(threading.Thread):
     _LOGGER.debug("Sending: %s" % cmd)
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
-    except (BrokenPipeError, TimeoutError, OSError):
+    except _KNOWN_EXCEPTIONS:
       self._disconnect_locked()
 
   def send(self, cmd):
@@ -111,7 +122,7 @@ class LutronConnection(threading.Thread):
       # Send 3 probes before we give up
       sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
     except OSError:
-      pass
+      _LOGGER.exception('error configuring socket')
 
     self._telnet.read_until(LutronConnection.USER_PROMPT, timeout=3)
     self._telnet.write(self._user + b'\r\n')
@@ -163,8 +174,7 @@ class LutronConnection(threading.Thread):
           line = t.read_until(b"\n", timeout=3)
         else:
           raise EOFError('Telnet object already torn down')
-      # OSError: [Errno 101] Network unreachable
-      except (OSError, EOFError, TimeoutError, socket.timeout):
+      except _KNOWN_EXCEPTIONS:
         try:
           self._lock.acquire()
           self._disconnect_locked()
