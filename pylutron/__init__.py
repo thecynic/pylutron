@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # We brute force exception handling in a number of areas to ensure
 # connections can be recovered
-_KNOWN_EXCEPTIONS = (
+_EXPECTED_NETWORK_EXCEPTIONS = (
   BrokenPipeError,
   # OSError: [Errno 101] Network unreachable
   OSError,
@@ -91,7 +91,8 @@ class LutronConnection(threading.Thread):
     _LOGGER.debug("Sending: %s" % cmd)
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
-    except _KNOWN_EXCEPTIONS:
+    except _EXPECTED_NETWORK_EXCEPTIONS:
+      _LOGGER.exception(f"Error sending {cmd}")
       self._disconnect_locked()
 
   def send(self, cmd):
@@ -101,7 +102,7 @@ class LutronConnection(threading.Thread):
     """
     with self._lock:
       if not self._connected:
-        _LOGGER.debug("Ignoring send of '%s' beause we are disconnected." % cmd)
+        _LOGGER.debug("Ignoring send of '%s' because we are disconnected." % cmd)
         return
       self._send_locked(cmd)
 
@@ -114,6 +115,7 @@ class LutronConnection(threading.Thread):
     try:
       sock = self._telnet.get_socket()
       sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+      # Some operating systems may not include TCP_KEEPIDLE (macOS, variants of Windows)
       if hasattr(socket, 'TCP_KEEPIDLE'):
         # Send keepalive probes after 60 seconds of inactivity
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
@@ -140,10 +142,12 @@ class LutronConnection(threading.Thread):
 
   def _disconnect_locked(self):
     """Closes the current connection. Assume self._lock is held."""
+    was_connected = self._connected
     self._connected = False
     self._connect_cond.notify_all()
     self._telnet = None
-    _LOGGER.warning("Disconnected")
+    if was_connected:
+      _LOGGER.warning("Disconnected")
 
   def _maybe_reconnect(self):
     """Reconnects to the controller if we have been previously disconnected."""
@@ -174,7 +178,8 @@ class LutronConnection(threading.Thread):
           line = t.read_until(b"\n", timeout=3)
         else:
           raise EOFError('Telnet object already torn down')
-      except _KNOWN_EXCEPTIONS:
+      except _EXPECTED_NETWORK_EXCEPTIONS:
+        _LOGGER.exception("Uncaught exception")
         try:
           self._lock.acquire()
           self._disconnect_locked()
