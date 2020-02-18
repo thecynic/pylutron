@@ -267,6 +267,7 @@ class LutronXmlDbParser(object):
         if device_xml.tag != 'Device':
           continue
         if device_xml.get('DeviceType') in (
+            'HWI_SEETOUCH_KEYPAD',
             'SEETOUCH_KEYPAD',
             'SEETOUCH_TABLETOP_KEYPAD',
             'PICO_KEYPAD',
