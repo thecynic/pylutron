@@ -300,6 +300,9 @@ class LutronXmlDbParser(object):
       if comp_type == 'BUTTON':
         button = self._parse_button(keypad, comp)
         keypad.add_button(button)
+      elif comp_type == 'CCI':
+        button = self._parse_cci(keypad, comp)
+        keypad.add_button(button)
       elif comp_type == 'LED':
         led = self._parse_led(keypad, comp)
         keypad.add_led(led)
@@ -321,6 +324,20 @@ class LutronXmlDbParser(object):
                     num=int(component_xml.get('ComponentNumber')),
                     button_type=button_type,
                     direction=direction)
+    return button
+    
+  def _parse_cci(self, keypad, component_xml):
+    """Parses a cci device that part of a keypad."""
+    component_number = component_xml.get('ComponentNumber')
+    cci_xml = component_xml.find('CCI')
+    name = "CCI Button " + component_number
+    cci_type = cci_xml.get('ButtonType')
+  
+    button = Button(self._lutron, keypad,
+                    name=name,
+                    num=int(component_number),
+                    button_type=cci_type,
+                    direction= None )
     return button
 
   def _parse_led(self, keypad, component_xml):
