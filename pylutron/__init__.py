@@ -101,18 +101,19 @@ class LutronConnection(threading.Thread):
     self._telnet = telnetlib.Telnet(self._host, timeout=2)  # 2 second timeout
 
     # Ensure we know that connection goes away somewhat quickly
-    try:
-      sock = self._telnet.get_socket()
-      sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-      # Send keepalive probes after 60 seconds of inactivity
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-      # Wait 10 seconds for an ACK
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-      # Send 3 probes before we give up
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
-    except OSError:
-      pass
+    # try:
+    #   sock = self._telnet.get_socket()
+    #   sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    #   # Send keepalive probes after 60 seconds of inactivity
+    #   sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+    #   # Wait 10 seconds for an ACK
+    #   sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+    #   # Send 3 probes before we give up
+    #   sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+    # except OSError:
+    #   pass
 
+    
     self._telnet.read_until(LutronConnection.USER_PROMPT, timeout=3)
     self._telnet.write(self._user + b'\r\n')
     self._telnet.read_until(LutronConnection.PW_PROMPT, timeout=3)
