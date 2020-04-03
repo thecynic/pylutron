@@ -743,19 +743,29 @@ class Button(KeypadComponent):
   events for (button presses)."""
   _ACTION_PRESS = 3
   _ACTION_RELEASE = 4
+  _ACTION_HOLD = 5
+  _ACTION_DOUBLE_TAP = 6
+  _ACTION_HOLD_RELEASE = 32
 
   class Event(LutronEvent):
     """Button events that can be generated.
 
-    PRESSED: The button has been pressed.
+    PRESSED: The button has been pressed. If CCI is closed
         Params: None
 
-    RELEASED: The button has been released. Not all buttons
+    RELEASED: The button has been released. If CCI is open. Not all buttons
               generate this event.
         Params: None
+    HOLDED:
+    TAPPED:
+    HOLD_RELEASED    
     """
     PRESSED = 1
     RELEASED = 2
+    HOLDED = 3
+    TAPPED = 4
+    HOLD_RELEASED = 5
+
 
   def __init__(self, lutron, keypad, name, num, button_type, direction):
     """Initializes the Button class."""
