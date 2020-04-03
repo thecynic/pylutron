@@ -1190,6 +1190,9 @@ class Area(object):
     """Adds a motion sensor object that's part of this area, only used during
     initial parsing."""
     self._sensors.append(sensor)
+    self.add_occupancy_group()
+  
+  def add_occupancy_group(self):
     if not self._occupancy_group:
       self._occupancy_group = OccupancyGroup(self._lutron, self)
 
