@@ -214,8 +214,15 @@ class LutronXmlDbParser(object):
     relevant Lutron objects and stuffs them into the appropriate hierarchy."""
     import xml.etree.ElementTree as ET
 
+    def visit_area(area_to_visit, location):
+      for areas_xml in area_to_visit.findall('Areas'):
+        for area_xml in areas_xml.findall('Area'):
+          area = self._parse_area(area_xml, location)
+          self.areas.append(area)
+          visit_area(area_xml, area.name)
+        
     root = ET.fromstring(self._xml_db_str)
-    # The structure is something like this:
+
     # <Areas>
     #   <Area ...>
     #     <DeviceGroups ...>
@@ -229,19 +236,22 @@ class LutronXmlDbParser(object):
     # "house". It contains the real nested Areas tree, which is the one we want.
     top_area = root.find('Areas').find('Area')
     self.project_name = top_area.get('Name')
-    areas = top_area.find('Areas')
-    for area_xml in areas.getiterator('Area'):
-      area = self._parse_area(area_xml)
-      self.areas.append(area)
+
+    visit_area(top_area,'')
+
     return True
 
-  def _parse_area(self, area_xml):
+  def _parse_area(self, area_xml, location):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
+    separator = "" if (location == "") else " " 
+    name = location + separator + area_xml.get('Name')
+    
     area = Area(self._lutron,
-                name=area_xml.get('Name'),
+                name= name ,
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group_id=area_xml.get('OccupancyGroupAssignedToID'))
+
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
