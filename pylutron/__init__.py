@@ -700,8 +700,13 @@ class Output(LutronEntity):
   @property
   def is_dimmable(self):
     """Returns a boolean of whether or not the output is dimmable."""
-    return self.type != 'NON_DIM' and not self.type.startswith('CCO_')
+    
+    return self.is_light and not self.type.startswith('NON_DIM')
 
+  def is_light(self):
+    """Returns a boolean of whether or not the output is a light."""
+    
+    return not self.type.startswith('CCO_') and not self.type.startswith('MOTOR')
 
 class KeypadComponent(LutronEntity):
   """Base class for a keypad component such as a button, or an LED."""
