@@ -810,7 +810,10 @@ class Button(KeypadComponent):
                   self._keypad.name, self, action, params))
     ev_map = {
         Button._ACTION_PRESS: Button.Event.PRESSED,
-        Button._ACTION_RELEASE: Button.Event.RELEASED
+        Button._ACTION_RELEASE: Button.Event.RELEASED,
+        Button._ACTION_HOLD: Button.Event.HOLDED,
+        Button._ACTION_DOUBLE_TAP: Button.Event.TAPPED,
+        Button._ACTION_HOLD_RELEASE: Button.Event.HOLD_RELEASED
     }
     if action not in ev_map:
       _LOGGER.debug("Unknown action %d for button %d in keypad %s" % (
