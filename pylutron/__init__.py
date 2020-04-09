@@ -1016,7 +1016,7 @@ class Keypad(LutronEntity):
     component = int(args[0])
     action = int(args[1])
     params = [int(x) for x in args[2:]]
-    _LOGGER.debug("Updating %d(%s): c=%d a=%d params=%s" % (
+    _LOGGER.debug("Updating keypad  id=%d (%s): component=%d action=%d params=%s" % (
         self._integration_id, self._name, component, action, params))
     if component in self._components:
       return self._components[component].handle_update(action, params)
