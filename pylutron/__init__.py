@@ -282,13 +282,15 @@ class LutronXmlDbParser(object):
             'MAIN_REPEATER',
             'HOMEOWNER_KEYPAD',
             'INTERNATIONAL_SEETOUCH_KEYPAD',
-            'WCI'):
+            'WCI',
+            'QS_IO_INTERFACE'):
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
           motion_sensor = self._parse_motion_sensor(device_xml)
           area.add_sensor(motion_sensor)
         #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
+      
     return area
 
   def _parse_output(self, output_xml):
