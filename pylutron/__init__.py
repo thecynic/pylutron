@@ -305,8 +305,12 @@ class LutronXmlDbParser(object):
 
   def _parse_keypad(self, keypad_xml, device_group):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
+
+    # keypad standard name is CSD 001, we use the DeviceGroup name instead
+    name = keypad_xml.get('Name') if (keypad_xml.get('Name') != "CSD 001") else device_group.get('Name') 
+
     keypad = Keypad(self._lutron,
-                    name=keypad_xml.get('Name'),
+                    name= name,
                     keypad_type=keypad_xml.get('DeviceType'),
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')))
