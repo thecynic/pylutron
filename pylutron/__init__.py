@@ -252,15 +252,21 @@ class LutronXmlDbParser(object):
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group_id=area_xml.get('OccupancyGroupAssignedToID'))
 
+    if int(area_xml.get('IntegrationID')) != 0 :
+      # let's setup an OccupancyGroup for this integration ID
+      area.add_occupancy_group()
+
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
+
     # device group in our case means keypad
     # device_group.get('Name') is the location of the keypad
     for device_group in area_xml.find('DeviceGroups'):
       if device_group.tag == 'DeviceGroup':
         devs = device_group.find('Devices')
       elif device_group.tag == 'Device':
+        # device that is not a keypad
         devs = [device_group]
       else:
         _LOGGER.info("Unknown tag in DeviceGroups child %s" % devs)
