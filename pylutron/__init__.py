@@ -427,7 +427,8 @@ class Lutron(object):
   @property
   def areas(self):
     """Return the areas that were discovered for this Lutron controller."""
-    return self._areas
+    # return self._areas
+    return tuple(area for area in self._areas)
 
   def subscribe(self, obj, handler):
     """Subscribes to status updates of the requested object.
