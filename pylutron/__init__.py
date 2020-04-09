@@ -334,10 +334,14 @@ class LutronXmlDbParser(object):
 
   def _parse_button(self, keypad, component_xml):
     """Parses a button device that part of a keypad."""
+    component_number = int(component_xml.get('ComponentNumber'))
     button_xml = component_xml.find('Button')
-    name = button_xml.get('Engraving')
+    engraving = button_xml.get('Engraving')
     button_type = button_xml.get('ButtonType')
     direction = button_xml.get('Direction')
+    led_logic = button_xml.get('LedLogic')
+    name = button_xml.get('Name')
+
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
       name = 'Dimmer ' + direction
@@ -345,23 +349,27 @@ class LutronXmlDbParser(object):
       name = "Unknown Button"
     button = Button(self._lutron, keypad,
                     name=name,
-                    num=int(component_xml.get('ComponentNumber')),
+                    engraving=engraving,
+                    num=component_number,
                     button_type=button_type,
-                    direction=direction)
+                    direction=direction,
+                    led_logic=led_logic)
     return button
     
   def _parse_cci(self, keypad, component_xml):
     """Parses a cci device that part of a keypad."""
-    component_number = component_xml.get('ComponentNumber')
+    component_number = int(component_xml.get('ComponentNumber'))
     cci_xml = component_xml.find('CCI')
-    name = "CCI Button " + component_number
     cci_type = cci_xml.get('ButtonType')
+    led_logic = cci_xml.get('LedLogic')
   
     button = Button(self._lutron, keypad,
-                    name=name,
-                    num=int(component_number),
+                    name=('CCI Button %d' % component_number),
+                    engraving='',
+                    num=component_number,
                     button_type=cci_type,
-                    direction= None )
+                    direction= None,
+                    led_logic=led_logic )
     return button
 
   def _parse_led(self, keypad, component_xml):
@@ -374,7 +382,8 @@ class LutronXmlDbParser(object):
     led = Led(self._lutron, keypad,
               name=('LED %d' % led_num),
               led_num=led_num,
-              component_num=component_num)
+              component_num=component_num
+              )
     return led
 
   def _parse_motion_sensor(self, sensor_xml):
