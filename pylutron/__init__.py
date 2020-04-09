@@ -612,7 +612,7 @@ class LutronEntity(object):
     """Subscribes to events from this entity.
 
     handler: A callable object that takes the following arguments (in order)
-             obj: the LutrongEntity object that generated the event
+             obj: the LutronEntity object that generated the event
              context: user-supplied (to subscribe()) context object
              event: the LutronEvent that was generated.
              params: a dict of event-specific parameters
@@ -639,6 +639,11 @@ class Output(LutronEntity):
   switched/dimmed load, e.g. light fixture, outlet, etc."""
   _CMD_TYPE = 'OUTPUT'
   _ACTION_ZONE_LEVEL = 1
+  _ACTION_START_RAISING = 2
+  _ACTION_START_LOWERING = 3
+  _ACTION_STOP = 4
+  _ACTION_JOG_RAISE = 18
+  _ACTION_JOG_LOWER = 19
 
   class Event(LutronEvent):
     """Output events that can be generated.
@@ -677,12 +682,12 @@ class Output(LutronEntity):
 
   def handle_update(self, args):
     """Handles an event update for this object, e.g. dimmer level change."""
-    _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
+    _LOGGER.debug("handle_update output %d -- %s" % (self._integration_id, args))
     state = int(args[0])
     if state != Output._ACTION_ZONE_LEVEL:
       return False
     level = float(args[1])
-    _LOGGER.debug("Updating %d(%s): s=%d l=%f" % (
+    _LOGGER.debug("Updating output id=%d (%s): s=%d l=%f" % (
         self._integration_id, self._name, state, level))
     self._level = level
     self._query_waiters.notify()
@@ -719,6 +724,18 @@ class Output(LutronEntity):
 #  def set_level(self, new_level, fade_time, delay):
 #    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
 #        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
+
+  def start_raising(self):
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_START_RAISING)
+
+  def start_lowering(self):
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_START_LOWERING)
+
+  def stop(self):
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_STOP)
 
   @property
   def watts(self):
