@@ -806,21 +806,23 @@ class Button(KeypadComponent):
               generate this event.
         Params: None
     HOLDED:
-    TAPPED:
+    DOUBLETAPPED:
     HOLD_RELEASED    
     """
     PRESSED = 1
     RELEASED = 2
     HOLDED = 3
-    TAPPED = 4
+    DOUBLETAPPED = 4
     HOLD_RELEASED = 5
 
 
-  def __init__(self, lutron, keypad, name, num, button_type, direction):
+  def __init__(self, lutron, keypad, name, engraving, num, button_type, direction, led_logic):
     """Initializes the Button class."""
     super(Button, self).__init__(lutron, keypad, name, num, num)
+    self._engraving = engraving
     self._button_type = button_type
     self._direction = direction
+    self._led_logic = led_logic
 
   def __str__(self):
     """Pretty printed string value of the Button object."""
@@ -836,6 +838,16 @@ class Button(KeypadComponent):
   def button_type(self):
     """Returns the button type (Toggle, MasterRaiseLower, etc.)."""
     return self._button_type
+  
+  @property
+  def engraving(self):
+    """Returns the button type (Toggle, MasterRaiseLower, etc.)."""
+    return self._engraving
+
+  @property
+  def led_logic(self):
+    """Returns the led logic for the button."""
+    return self._led_logic
 
   def press(self):
     """Triggers a simulated button press to the Keypad."""
@@ -850,7 +862,7 @@ class Button(KeypadComponent):
         Button._ACTION_PRESS: Button.Event.PRESSED,
         Button._ACTION_RELEASE: Button.Event.RELEASED,
         Button._ACTION_HOLD: Button.Event.HOLDED,
-        Button._ACTION_DOUBLE_TAP: Button.Event.TAPPED,
+        Button._ACTION_DOUBLE_TAP: Button.Event.DOUBLETAPPED,
         Button._ACTION_HOLD_RELEASE: Button.Event.HOLD_RELEASED
     }
     if action not in ev_map:
