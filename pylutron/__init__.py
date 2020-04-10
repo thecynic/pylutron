@@ -753,6 +753,7 @@ class Output(LutronEntity):
     
     return self.is_light and not self.type.startswith('NON_DIM')
 
+  @property
   def is_light(self):
     """Returns a boolean of whether or not the output is a light."""
     
