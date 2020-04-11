@@ -339,14 +339,13 @@ class LutronXmlDbParser(object):
     engraving = button_xml.get('Engraving')
     button_type = button_xml.get('ButtonType')
     direction = button_xml.get('Direction')
-    led_logic = button_xml.get('LedLogic')
-    name = button_xml.get('Name')
+    led_logic = 0 if button_xml.get('LedLogic') is None else int(button_xml.get('LedLogic'))
+    name = f"keypad {keypad.id}: Btn {component_number}"
 
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
       name = 'Dimmer ' + direction
-    if not name:
-      name = "Unknown Button"
+  
     button = Button(self._lutron, keypad,
                     name=name,
                     engraving=engraving,
@@ -362,9 +361,10 @@ class LutronXmlDbParser(object):
     cci_xml = component_xml.find('CCI')
     cci_type = cci_xml.get('ButtonType')
     led_logic = cci_xml.get('LedLogic')
+    name = f"keypad {keypad.id}: CCI {component_number}"
   
     button = Button(self._lutron, keypad,
-                    name=('CCI Button %d' % component_number),
+                    name=name,
                     engraving='',
                     num=component_number,
                     button_type=cci_type,
@@ -375,12 +375,14 @@ class LutronXmlDbParser(object):
   def _parse_led(self, keypad, component_xml):
     """Parses an LED device that part of a keypad."""
     component_num = int(component_xml.get('ComponentNumber'))
+    
     led_base = 80
     if keypad.type == 'MAIN_REPEATER':
       led_base = 100
     led_num = component_num - led_base
+    name = f"keypad {keypad.id}: LED {led_num}"
     led = Led(self._lutron, keypad,
-              name=('LED %d' % led_num),
+              name=name,
               led_num=led_num,
               component_num=component_num
               )
@@ -836,7 +838,7 @@ class Button(KeypadComponent):
   def __repr__(self):
     """String representation of the Button object."""
     return str({'name': self.name, 'num': self.number,
-               'type': self._button_type, 'direction': self._direction})
+               'type': self._button_type, 'direction': self._direction, 'led_logic': self._led_logic})
 
   @property
   def button_type(self):
