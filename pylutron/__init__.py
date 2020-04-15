@@ -290,6 +290,10 @@ class LutronXmlDbParser(object):
           motion_sensor = self._parse_motion_sensor(device_xml)
           area.add_sensor(motion_sensor)
         #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
+        else:
+          #phantom keypad doesn't have a DeviceType
+          keypad = self._parse_keypad(device_xml, device_group)
+          area.add_keypad(keypad)
       
     return area
 
@@ -379,6 +383,9 @@ class LutronXmlDbParser(object):
     led_base = 80
     if keypad.type == 'MAIN_REPEATER':
       led_base = 100
+    elif keypad.type == 'PHANTOM':
+      led_base = 2000
+   
     led_num = component_num - led_base
     name = f"keypad {keypad.id}: LED {led_num}"
     led = Led(self._lutron, keypad,
@@ -969,7 +976,7 @@ class Keypad(LutronEntity):
     self._components = {}
     self._location = location
     self._integration_id = integration_id
-    self._type = keypad_type
+    self._type = keypad_type if keypad_type else 'PHANTOM'
 
     self._lutron.register_id(Keypad._CMD_TYPE, self)
 
