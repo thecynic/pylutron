@@ -92,7 +92,7 @@ class LutronConnection(threading.Thread):
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
     except _EXPECTED_NETWORK_EXCEPTIONS:
-      _LOGGER.exception(f"Error sending {cmd}")
+      _LOGGER.exception("Error sending {}".format(cmd))
       self._disconnect_locked()
 
   def send(self, cmd):
