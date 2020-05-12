@@ -38,7 +38,11 @@ class InvalidSubscription(LutronException):
   Lutron.subscribe on an incompatible object."""
   pass
 
-
+class controller(Enum):
+  UNKNOWN: 0
+  RADIORA2: 1
+  HOMEWORKS: 2
+   
 class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
@@ -57,7 +61,7 @@ class LutronConnection(threading.Thread):
     self._lock = threading.Lock()
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
-    self._controller = '*UNKNOWN*'
+    self._controller = controller.UNKNOWN
     self._done = False
 
     self.setDaemon(True)
@@ -122,9 +126,9 @@ class LutronConnection(threading.Thread):
     prompt = self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
 
     if prompt == b'QNET> ':
-      self._controller = 'HomeWorks'
+      self._controller = controller.HOMEWORKS
     elif prompt == b'GNET> ':
-      self._controller = 'RadioRA'
+      self._controller = controller.RADIORA2
     else:
       _LOGGER.warning("unsupported lutron prompt: %s", prompt)
     _LOGGER.info("Identified Lutron %s", self._controller)
@@ -214,15 +218,14 @@ class LutronXmlDbParser(object):
     relevant Lutron objects and stuffs them into the appropriate hierarchy."""
     import xml.etree.ElementTree as ET
 
-    def visit_area(area_to_visit, location):
+    def visit_area(area_to_visit, location=None):
       for areas_xml in area_to_visit.findall('Areas'):
         for area_xml in areas_xml.findall('Area'):
           area = self._parse_area(area_xml, location)
           self.areas.append(area)
           visit_area(area_xml, area.name)
-        
-    root = ET.fromstring(self._xml_db_str)
 
+    root = ET.fromstring(self._xml_db_str)
     # <Areas>
     #   <Area ...>
     #     <DeviceGroups ...>
@@ -231,31 +234,25 @@ class LutronXmlDbParser(object):
     #     <Outputs ...>
     #     <Areas ...>
     #       <Area ...>
-
     # First area is useless, it's the top-level project area that defines the
     # "house". It contains the real nested Areas tree, which is the one we want.
     top_area = root.find('Areas').find('Area')
     self.project_name = top_area.get('Name')
-
-    visit_area(top_area,'')
-
+    visit_area(top_area)
     return True
 
   def _parse_area(self, area_xml, location):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
-    separator = "" if (location == "") else " " 
+    separator = "" if (location is None) else " " 
     name = location + separator + area_xml.get('Name')
-    
     area = Area(self._lutron,
-                name= name ,
+                name=name,
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group_id=area_xml.get('OccupancyGroupAssignedToID'))
-
     if int(area_xml.get('IntegrationID')) != 0 :
       # let's setup an OccupancyGroup for this integration ID
       area.add_occupancy_group()
-
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
@@ -309,12 +306,12 @@ class LutronXmlDbParser(object):
 
   def _parse_keypad(self, keypad_xml, device_group):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
-
     # keypad standard name is CSD 001, we use the integration ID nme instead
-    name = keypad_xml.get('Name') if (keypad_xml.get('Name') != "CSD 001") else f"keypad {keypad_xml.get('IntegrationID')}"
-
+    name = keypad_xml.get('Name') 
+    if (keypad_xml.get('Name') == "CSD 001"):
+      name = f"keypad {keypad_xml.get('IntegrationID')}"
     keypad = Keypad(self._lutron,
-                    name= name,
+                    name=name,
                     keypad_type=keypad_xml.get('DeviceType'),
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')))
@@ -372,8 +369,8 @@ class LutronXmlDbParser(object):
                     engraving='',
                     num=component_number,
                     button_type=cci_type,
-                    direction= None,
-                    led_logic=led_logic )
+                    direction=None,
+                    led_logic=led_logic)
     return button
 
   def _parse_led(self, keypad, component_xml):
@@ -385,14 +382,12 @@ class LutronXmlDbParser(object):
       led_base = 100
     elif keypad.type == 'PHANTOM':
       led_base = 2000
-   
     led_num = component_num - led_base
     name = f"keypad {keypad.id}: LED {led_num}"
     led = Led(self._lutron, keypad,
               name=name,
               led_num=led_num,
-              component_num=component_num
-              )
+              component_num=component_num)
     return led
 
   def _parse_motion_sensor(self, sensor_xml):
@@ -759,13 +754,11 @@ class Output(LutronEntity):
   @property
   def is_dimmable(self):
     """Returns a boolean of whether or not the output is dimmable."""
-    
     return self.is_light and not self.type.startswith('NON_DIM')
 
   @property
   def is_light(self):
-    """Returns a boolean of whether or not the output is a light."""
-    
+    """Returns a boolean of whether or not the output is a light."""  
     return not self.type.startswith('CCO_') and not self.type.startswith('MOTOR')
 
 class KeypadComponent(LutronEntity):
@@ -810,21 +803,27 @@ class Button(KeypadComponent):
   class Event(LutronEvent):
     """Button events that can be generated.
 
-    PRESSED: The button has been pressed. If CCI is closed
+    PRESS: The button has been pressed, or the contact (CCI) is closed.
         Params: None
 
-    RELEASED: The button has been released. If CCI is open. Not all buttons
+    RELEASE: The button has been released., or the contact (CCI) is open. Not all buttons
               generate this event.
         Params: None
-    HOLDED:
-    DOUBLETAPPED:
-    HOLD_RELEASED    
+
+    HOLD: The button has been hold. Not all buttons generate this event.
+        Params: None
+
+    DOUBLE_TAP: The button has been double tapped. Not all buttons generate this event.
+        Params: None
+
+    HOLD_RELEASE: The button has been released after an hold. Not all buttons generate this event.
+        Params: None  
     """
-    PRESSED = 1
-    RELEASED = 2
-    HOLDED = 3
-    DOUBLETAPPED = 4
-    HOLD_RELEASED = 5
+    PRESS = 1
+    RELEASE = 2
+    HOLD = 3
+    DOUBLE_TAP = 4
+    HOLD_RELEASE = 5
 
 
   def __init__(self, lutron, keypad, name, engraving, num, button_type, direction, led_logic):
@@ -870,11 +869,11 @@ class Button(KeypadComponent):
     _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
                   self._keypad.name, self, action, params))
     ev_map = {
-        Button._ACTION_PRESS: Button.Event.PRESSED,
-        Button._ACTION_RELEASE: Button.Event.RELEASED,
-        Button._ACTION_HOLD: Button.Event.HOLDED,
-        Button._ACTION_DOUBLE_TAP: Button.Event.DOUBLETAPPED,
-        Button._ACTION_HOLD_RELEASE: Button.Event.HOLD_RELEASED
+        Button._ACTION_PRESS: Button.Event.PRESS,
+        Button._ACTION_RELEASE: Button.Event.RELEASE,
+        Button._ACTION_HOLD: Button.Event.HOLD,
+        Button._ACTION_DOUBLE_TAP: Button.Event.DOUBLE_TAP,
+        Button._ACTION_HOLD_RELEASE: Button.Event.HOLD_RELEASE
     }
     if action not in ev_map:
       _LOGGER.debug("Unknown action %d for button %d in keypad %s" % (
@@ -894,7 +893,8 @@ class Led(KeypadComponent):
 
     STATE_CHANGED: The button has been pressed.
         Params:
-          state: The value of the new LED state. 0 = off, 1= on, 2= 1 flash/sec, 3= 10 flash/sec
+          state: The value of the new LED state. 
+          0= off, 1= on, 2= 1 flash/sec, 3= 10 flash/sec
     """
     STATE_CHANGED = 1
 
@@ -1026,7 +1026,7 @@ class Keypad(LutronEntity):
     component = int(args[0])
     action = int(args[1])
     params = [int(x) for x in args[2:]]
-    _LOGGER.debug("Updating keypad  id=%d (%s): component=%d action=%d params=%s" % (
+    _LOGGER.debug("Updating keypad id=%d (%s): component=%d action=%d params=%s" % (
         self._integration_id, self._name, component, action, params))
     if component in self._components:
       return self._components[component].handle_update(action, params)
