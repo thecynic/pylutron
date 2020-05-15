@@ -244,8 +244,8 @@ class LutronXmlDbParser(object):
   def _parse_area(self, area_xml, location):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
-    separator = "" if (location is None) else " " 
-    name = location + separator + area_xml.get('Name')
+    path = "" if (location is None) else location + " " 
+    name = path + area_xml.get('Name')
     area = Area(self._lutron,
                 name=name,
                 integration_id=int(area_xml.get('IntegrationID')),
