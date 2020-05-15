@@ -37,12 +37,12 @@ class InvalidSubscription(LutronException):
   """Raised when an invalid subscription is requested (e.g. calling
   Lutron.subscribe on an incompatible object."""
   pass
-
-class controller(Enum):
-  UNKNOWN: 0
-  RADIORA2: 1
-  HOMEWORKS: 2
    
+class Controller(Enum):
+  UNKNOWN = 0
+  RADIORA2 = 1
+  HOMEWORKS = 2
+
 class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
@@ -61,7 +61,7 @@ class LutronConnection(threading.Thread):
     self._lock = threading.Lock()
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
-    self._controller = controller.UNKNOWN
+    self._controller = Controller.UNKNOWN
     self._done = False
 
     self.setDaemon(True)
@@ -126,9 +126,9 @@ class LutronConnection(threading.Thread):
     prompt = self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
 
     if prompt == b'QNET> ':
-      self._controller = controller.HOMEWORKS
+      self._controller = Controller.HOMEWORKS
     elif prompt == b'GNET> ':
-      self._controller = controller.RADIORA2
+      self._controller = Controller.RADIORA2
     else:
       _LOGGER.warning("unsupported lutron prompt: %s", prompt)
     _LOGGER.info("Identified Lutron %s", self._controller)
