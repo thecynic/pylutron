@@ -1,6 +1,6 @@
 pylutron
 =====
-A simple Python library for controlling a Lutron RadioRA 2 system with a Main
+A simple Python library for controlling a Lutron RadioRA 2 or HomeWorks system with a Main
 Repeater.
 
 Installation
