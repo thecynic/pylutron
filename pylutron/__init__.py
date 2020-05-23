@@ -232,8 +232,10 @@ class LutronXmlDbParser(object):
     #     <Outputs ...>
     #     <Areas ...>
     #       <Area ...>
-    guid = root.find('GUID').text
-    self._lutron.set_guid(guid)
+
+    # The GUID is unique to the repeater and is useful for constructing unique
+    # identifiers that won't change over time.
+    self._lutron.set_guid(root.find('GUID').text)
 
     # First area is useless, it's the top-level project area that defines the
     # "house". It contains the real nested Areas tree, which is the one we want.
@@ -292,7 +294,7 @@ class LutronXmlDbParser(object):
                     watts=int(output_xml.get('Wattage')),
                     output_type=output_xml.get('OutputType'),
                     integration_id=int(output_xml.get('IntegrationID')),
-                    uuid=int(output_xml.get('UUID')))
+                    uuid=output_xml.get('UUID'))
     return output
 
   def _parse_keypad(self, keypad_xml, device_group):
@@ -302,7 +304,7 @@ class LutronXmlDbParser(object):
                     keypad_type=keypad_xml.get('DeviceType'),
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')),
-                    uuid=int(keypad_xml.get('UUID')))
+                    uuid=keypad_xml.get('UUID'))
     components = keypad_xml.find('Components')
     if components is None:
       return keypad
@@ -334,7 +336,7 @@ class LutronXmlDbParser(object):
                     num=int(component_xml.get('ComponentNumber')),
                     button_type=button_type,
                     direction=direction,
-                    uuid=int(button_xml.get('UUID')))
+                    uuid=button_xml.get('UUID'))
     return button
 
   def _parse_led(self, keypad, component_xml):
@@ -348,7 +350,7 @@ class LutronXmlDbParser(object):
               name=('LED %d' % led_num),
               led_num=led_num,
               component_num=component_num,
-              uuid=int(component_xml.find('LED').get('UUID')))
+              uuid=component_xml.find('LED').get('UUID'))
     return led
 
   def _parse_motion_sensor(self, sensor_xml):
@@ -362,7 +364,7 @@ class LutronXmlDbParser(object):
     return MotionSensor(self._lutron,
                         name=sensor_xml.get('Name'),
                         integration_id=int(sensor_xml.get('IntegrationID')),
-                        uuid=int(sensor_xml.get('UUID')))
+                        uuid=sensor_xml.get('UUID'))
 
 
 class Lutron(object):
