@@ -237,6 +237,12 @@ class LutronXmlDbParser(object):
     # identifiers that won't change over time.
     self._lutron.set_guid(root.find('GUID').text)
 
+    # TODO: Parse Occupancy Groups
+    # OccupancyGroups are referenced by entities in the rest of the XML.  The
+    # current structure of the code expects to go from areas -> devices ->
+    # other assets and attributes.  This either requires the implementation of
+    # late binding for occupancy groups OR we just parse them first.
+
     # First area is useless, it's the top-level project area that defines the
     # "house". It contains the real nested Areas tree, which is the one we want.
     top_area = root.find('Areas').find('Area')
@@ -1189,8 +1195,8 @@ class Area(object):
     initial parsing."""
     self._sensors.append(sensor)
     if not self._occupancy_group:
-      # TODO: add the uuid for the occupancy group
-      self._occupancy_group = OccupancyGroup(self._lutron, self, None)
+      # TODO: Use a parsed UUID from the XML once occupancy groups are properly parsed.
+      self._occupancy_group = OccupancyGroup(self._lutron, self, self._occupancy_group_id)
 
   @property
   def name(self):
