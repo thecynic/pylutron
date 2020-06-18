@@ -289,12 +289,17 @@ class LutronXmlDbParser(object):
   def _parse_output(self, output_xml):
     """Parses an output, which is generally a switch controlling a set of
     lights/outlets, etc."""
-    output = Output(self._lutron,
-                    name=output_xml.get('Name'),
-                    watts=int(output_xml.get('Wattage')),
-                    output_type=output_xml.get('OutputType'),
-                    integration_id=int(output_xml.get('IntegrationID')),
-                    uuid=output_xml.get('UUID'))
+    output_type = output_xml.get('OutputType')
+    output_cls = Output
+    if output_type == "SYSTEM_SHADE":
+      output_cls = Shade
+
+    output = output_cls(self._lutron,
+                        name=output_xml.get('Name'),
+                        watts=int(output_xml.get('Wattage')),
+                        output_type=output_xml.get('OutputType'),
+                        integration_id=int(output_xml.get('IntegrationID')),
+                        uuid=output_xml.get('UUID'))
     return output
 
   def _parse_keypad(self, keypad_xml, device_group):
@@ -714,6 +719,29 @@ class Output(LutronEntity):
   def is_dimmable(self):
     """Returns a boolean of whether or not the output is dimmable."""
     return self.type != 'NON_DIM' and not self.type.startswith('CCO_')
+
+
+class Shade(Output):
+  """This is the output entity for shades in Lutron universe."""
+  switched/dimmed load, e.g. light fixture, outlet, etc."""
+  _ACTION_RAISE = 2
+  _ACTION_LOWER = 3
+  _ACTION_STOP = 4
+
+  def raise(self):
+    "Starts raising the shade."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_RAISE)
+
+  def lower(self):
+    "Starts lowering the shade."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_LOWER)
+
+  def stop(self):
+    "Starts raising the shade."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_STOP)
 
 
 class KeypadComponent(LutronEntity):
