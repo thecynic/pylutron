@@ -405,6 +405,10 @@ class Lutron(object):
   def guid(self):
     return self._guid
 
+  @property
+  def name(self):
+    return self._name
+
   def subscribe(self, obj, handler):
     """Subscribes to status updates of the requested object.
 
