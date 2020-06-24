@@ -290,17 +290,16 @@ class LutronXmlDbParser(object):
     """Parses an output, which is generally a switch controlling a set of
     lights/outlets, etc."""
     output_type = output_xml.get('OutputType')
-    output_cls = Output
-    if output_type == "SYSTEM_SHADE":
-      output_cls = Shade
-
-    output = output_cls(self._lutron,
-                        name=output_xml.get('Name'),
-                        watts=int(output_xml.get('Wattage')),
-                        output_type=output_xml.get('OutputType'),
-                        integration_id=int(output_xml.get('IntegrationID')),
-                        uuid=output_xml.get('UUID'))
-    return output
+    kwargs = {
+      'name': output_xml.get('Name'),
+      'watts': int(output_xml.get('Wattage')),
+      'output_type': output_type,
+      'integration_id': int(output_xml.get('IntegrationID')),
+      'uuid': output_xml.get('UUID')
+    }
+    if output_type == 'SYSTEM_SHADE':
+      return Shade(self._lutron, **kwargs)
+    return Output(self._lutron, **kwargs)
 
   def _parse_keypad(self, keypad_xml, device_group):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
@@ -723,23 +722,22 @@ class Output(LutronEntity):
 
 class Shade(Output):
   """This is the output entity for shades in Lutron universe."""
-  switched/dimmed load, e.g. light fixture, outlet, etc."""
   _ACTION_RAISE = 2
   _ACTION_LOWER = 3
   _ACTION_STOP = 4
 
-  def raise(self):
-    "Starts raising the shade."""
+  def start_raise(self):
+    """Starts raising the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_RAISE)
 
-  def lower(self):
-    "Starts lowering the shade."""
+  def start_lower(self):
+    """Starts lowering the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_LOWER)
 
   def stop(self):
-    "Starts raising the shade."""
+    """Starts raising the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_STOP)
 
