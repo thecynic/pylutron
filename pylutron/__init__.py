@@ -248,7 +248,6 @@ class LutronXmlDbParser(object):
       group = self._parse_occupancy_group(group_xml)
       if group.group_number:
         self._occupancy_groups[group.group_number] = group
-        print("Adding group to id", group.group_number)
       else:
         _LOGGER.warning("Occupancy Group has no number.  XML: %s" % group_xml)
 
