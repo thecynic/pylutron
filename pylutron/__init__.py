@@ -249,7 +249,7 @@ class LutronXmlDbParser(object):
       if group.group_number:
         self._occupancy_groups[group.group_number] = group
       else:
-        _LOGGER.warning("Occupancy Group has no number.  XML: %s" % group_xml)
+        _LOGGER.warning("Occupancy Group has no number.  XML: %s", group_xml)
 
     # First area is useless, it's the top-level project area that defines the
     # "house". It contains the real nested Areas tree, which is the one we want.
@@ -264,10 +264,15 @@ class LutronXmlDbParser(object):
   def _parse_area(self, area_xml):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
+    occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
+    occupancy_group = self._occupancy_groups.get(occupancy_group_id)
+    area_name = area_xml.get('Name')
+    if not occupancy_group:
+      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", area_name, occupancy_group_id)
     area = Area(self._lutron,
-                name=area_xml.get('Name'),
+                name=area_name,
                 integration_id=int(area_xml.get('IntegrationID')),
-                occupancy_group=self._occupancy_groups[area_xml.get('OccupancyGroupAssignedToID')])
+                occupancy_group=occupancy_group)
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
@@ -1205,7 +1210,8 @@ class Area(object):
     self._outputs = []
     self._keypads = []
     self._sensors = []
-    occupancy_group._bind_area(self)
+    if occupancy_group:
+      occupancy_group._bind_area(self)
 
   def add_output(self, output):
     """Adds an output object that's part of this area, only used during
