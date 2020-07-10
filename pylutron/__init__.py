@@ -215,6 +215,7 @@ class LutronXmlDbParser(object):
     self._lutron = lutron
     self._xml_db_str = xml_db_str
     self.areas = []
+    self._occupancy_groups = {}
     self.project_name = None
 
   def parse(self):
@@ -237,6 +238,19 @@ class LutronXmlDbParser(object):
     # identifiers that won't change over time.
     self._lutron.set_guid(root.find('GUID').text)
 
+    # Parse Occupancy Groups
+    # OccupancyGroups are referenced by entities in the rest of the XML.  The
+    # current structure of the code expects to go from areas -> devices ->
+    # other assets and attributes.  Here we index the groups to be bound to
+    # Areas later.
+    groups = root.find('OccupancyGroups')
+    for group_xml in groups.getiterator('OccupancyGroup'):
+      group = self._parse_occupancy_group(group_xml)
+      if group.group_number:
+        self._occupancy_groups[group.group_number] = group
+      else:
+        _LOGGER.warning("Occupancy Group has no number.  XML: %s", group_xml)
+
     # First area is useless, it's the top-level project area that defines the
     # "house". It contains the real nested Areas tree, which is the one we want.
     top_area = root.find('Areas').find('Area')
@@ -250,10 +264,15 @@ class LutronXmlDbParser(object):
   def _parse_area(self, area_xml):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
+    occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
+    occupancy_group = self._occupancy_groups.get(occupancy_group_id)
+    area_name = area_xml.get('Name')
+    if not occupancy_group:
+      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", area_name, occupancy_group_id)
     area = Area(self._lutron,
-                name=area_xml.get('Name'),
+                name=area_name,
                 integration_id=int(area_xml.get('IntegrationID')),
-                occupancy_group_id=area_xml.get('OccupancyGroupAssignedToID'))
+                occupancy_group=occupancy_group)
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
@@ -366,6 +385,15 @@ class LutronXmlDbParser(object):
                         integration_id=int(sensor_xml.get('IntegrationID')),
                         uuid=sensor_xml.get('UUID'))
 
+  def _parse_occupancy_group(self, group_xml):
+    """Parses an Occupancy Group object.
+
+    These are defined outside of the areas in the XML.  Areas refer to these
+    objects by ID.
+    """
+    return OccupancyGroup(self._lutron,
+                          group_number=group_xml.get('OccupancyGroupNumber'),
+                          uuid=group_xml.get('UUID'))
 
 class Lutron(object):
   """Main Lutron Controller class.
@@ -1108,18 +1136,28 @@ class OccupancyGroup(LutronEntity):
     """
     OCCUPANCY = 1
 
-  def __init__(self, lutron, area, uuid):
-    super(OccupancyGroup, self).__init__(lutron, 'Occ {}'.format(area.name), uuid)
+  def __init__(self, lutron, group_number, uuid):
+    super(OccupancyGroup, self).__init__(lutron, None, uuid)
+    self._area = None
+    self._group_number = group_number
+    self._integration_id = None
+    self._state = None
+    self._query_waiters = _RequestHelper()
+
+  def _bind_area(self, area):
     self._area = area
     self._integration_id = area.id
-    self._state = None
     self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
-    self._query_waiters = _RequestHelper()
 
   @property
   def id(self):
     """The integration id"""
     return self._integration_id
+
+  @property
+  def group_number(self):
+    """The OccupancyGroupNumber"""
+    return self._group_number
 
   @property
   def name(self):
@@ -1168,15 +1206,16 @@ class OccupancyGroup(LutronEntity):
 
 class Area(object):
   """An area (i.e. a room) that contains devices/outputs/etc."""
-  def __init__(self, lutron, name, integration_id, occupancy_group_id):
+  def __init__(self, lutron, name, integration_id, occupancy_group):
     self._lutron = lutron
     self._name = name
     self._integration_id = integration_id
-    self._occupancy_group_id = occupancy_group_id
-    self._occupancy_group = None
+    self._occupancy_group = occupancy_group
     self._outputs = []
     self._keypads = []
     self._sensors = []
+    if occupancy_group:
+      occupancy_group._bind_area(self)
 
   def add_output(self, output):
     """Adds an output object that's part of this area, only used during
@@ -1192,9 +1231,6 @@ class Area(object):
     """Adds a motion sensor object that's part of this area, only used during
     initial parsing."""
     self._sensors.append(sensor)
-    if not self._occupancy_group:
-      # TODO: add the uuid for the occupancy group
-      self._occupancy_group = OccupancyGroup(self._lutron, self, None)
 
   @property
   def name(self):
