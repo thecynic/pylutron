@@ -210,6 +210,31 @@ class LutronXmlDbParser(object):
   (Output). We handle the most relevant features, but some things like LEDs,
   etc. are not implemented."""
 
+  _GRAFIK_EYE_QS_COMPONENTS = {
+    # http://www.lutron.com/TechnicalDocumentLibrary/Grafik_QS_Complete.pdf
+    # Component ID => (Column No, LED ID)
+    70: (None, 201),  # Scene 1
+    71: (None, 210),  # Scene 2
+    76: (None, 219),  # Scene 3
+    77: (None, 228),  # Scene 4
+    83: (None, 237),  # Scene Off
+    38: (1, 174),     # Column 1 Open
+    39: (1, 175),     # Column 1 Preset
+    40: (1, 211),     # Column 1 Close
+    41: (1, None),    # Column 1 Lower
+    47: (1, None),    # Column 1 Raise
+    44: (2, 183),     # Column 2 Open
+    45: (2, 184),     # Column 2 Preset
+    46: (2, 220),     # Column 2 Close
+    52: (2, None),    # Column 2 Lower
+    53: (2, None),    # Column 2 Raise
+    50: (3, 192),     # Column 3 Open
+    51: (3, 193),     # Column 3 Preset
+    56: (3, 229),     # Column 3 Close
+    57: (3, None),    # Column 3 Lower
+    58: (3, None),    # Column 3 Raise
+  }
+
   def __init__(self, lutron, xml_db_str):
     """Initializes the XML parser, takes the raw XML data as string input."""
     self._lutron = lutron
@@ -351,7 +376,6 @@ class LutronXmlDbParser(object):
     button_type = button_xml.get('ButtonType')
     direction = button_xml.get('Direction')
     button_id = int(component_xml.get('ComponentNumber'))
-
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
       name = 'Dimmer ' + direction
@@ -378,8 +402,8 @@ class LutronXmlDbParser(object):
     if keypad.type == 'MAIN_REPEATER':
       led_num = component_num - 100
     elif keypad.type == "GRAFIK_EYE_QS":
-      for button_id, button_info in self._GRAFIK_EYE_QS_COMPONENTS.items():
-        if component_num == button_info[1]:
+      for button_id, (column, led_id) in self._GRAFIK_EYE_QS_COMPONENTS.items():
+        if component_num == led_id:
           led_num = button_id
           break
     else:
@@ -414,31 +438,6 @@ class LutronXmlDbParser(object):
     return OccupancyGroup(self._lutron,
                           group_number=group_xml.get('OccupancyGroupNumber'),
                           uuid=group_xml.get('UUID'))
-
-  _GRAFIK_EYE_QS_COMPONENTS = {
-    # http://www.lutron.com/TechnicalDocumentLibrary/Grafik_QS_Complete.pdf
-    # Component ID => (Column No, LED ID)
-    70: (None, 201),  # Scene 1
-    71: (None, 210),  # Scene 2
-    76: (None, 219),  # Scene 3
-    77: (None, 228),  # Scene 4
-    83: (None, 237),  # Scene Off
-    38: (1, 174),     # Column 1 Open
-    39: (1, 175),     # Column 1 Preset
-    40: (1, 211),     # Column 1 Close
-    41: (1, None),    # Column 1 Lower
-    47: (1, None),    # Column 1 Raise
-    44: (2, 183),     # Column 2 Open
-    45: (2, 184),     # Column 2 Preset
-    46: (2, 220),     # Column 2 Close
-    52: (2, None),    # Column 2 Lower
-    53: (2, None),    # Column 2 Raise
-    50: (3, 192),     # Column 3 Open
-    51: (3, 193),     # Column 3 Preset
-    56: (3, 229),     # Column 3 Close
-    57: (3, None),    # Column 3 Lower
-    58: (3, None),    # Column 3 Raise
-  }
 
 class Lutron(object):
   """Main Lutron Controller class.
