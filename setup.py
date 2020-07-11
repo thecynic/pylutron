@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'pylutron',
-    version = '0.2.5',
+    version = '0.2.6',
     license = 'MIT',
     description = 'Python library for Lutron RadioRA 2',
     author = 'Dima Zavin',

@@ -18,6 +18,17 @@ from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
 
+# We brute force exception handling in a number of areas to ensure
+# connections can be recovered
+_EXPECTED_NETWORK_EXCEPTIONS = (
+  BrokenPipeError,
+  # OSError: [Errno 101] Network unreachable
+  OSError,
+  EOFError,
+  TimeoutError,
+  socket.timeout,
+)
+
 class LutronException(Exception):
   """Top level module exception."""
   pass
@@ -80,7 +91,8 @@ class LutronConnection(threading.Thread):
     _LOGGER.debug("Sending: %s" % cmd)
     try:
       self._telnet.write(cmd.encode('ascii') + b'\r\n')
-    except (BrokenPipeError, TimeoutError, OSError, AttributeError):
+    except _EXPECTED_NETWORK_EXCEPTIONS:
+      _LOGGER.exception("Error sending {}".format(cmd))
       self._disconnect_locked()
 
   def send(self, cmd):
@@ -90,7 +102,7 @@ class LutronConnection(threading.Thread):
     """
     with self._lock:
       if not self._connected:
-        _LOGGER.debug("Ignoring send of '%s' beause we are disconnected." % cmd)
+        _LOGGER.debug("Ignoring send of '%s' because we are disconnected." % cmd)
         return
       self._send_locked(cmd)
 
@@ -103,14 +115,16 @@ class LutronConnection(threading.Thread):
     try:
       sock = self._telnet.get_socket()
       sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-      # Send keepalive probes after 60 seconds of inactivity
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+      # Some operating systems may not include TCP_KEEPIDLE (macOS, variants of Windows)
+      if hasattr(socket, 'TCP_KEEPIDLE'):
+        # Send keepalive probes after 60 seconds of inactivity
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
       # Wait 10 seconds for an ACK
       sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
       # Send 3 probes before we give up
       sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
     except OSError:
-      pass
+      _LOGGER.exception('error configuring socket')
 
     self._telnet.read_until(LutronConnection.USER_PROMPT, timeout=3)
     self._telnet.write(self._user + b'\r\n')
@@ -128,10 +142,12 @@ class LutronConnection(threading.Thread):
 
   def _disconnect_locked(self):
     """Closes the current connection. Assume self._lock is held."""
+    was_connected = self._connected
     self._connected = False
     self._connect_cond.notify_all()
     self._telnet = None
-    _LOGGER.warning("Disconnected")
+    if was_connected:
+      _LOGGER.warning("Disconnected")
 
   def _maybe_reconnect(self):
     """Reconnects to the controller if we have been previously disconnected."""
@@ -162,10 +178,13 @@ class LutronConnection(threading.Thread):
           line = t.read_until(b"\n", timeout=3)
         else:
           raise EOFError('Telnet object already torn down')
-      except (EOFError, TimeoutError, socket.timeout, AttributeError):
+      except _EXPECTED_NETWORK_EXCEPTIONS:
+        _LOGGER.exception("Uncaught exception")
         try:
           self._lock.acquire()
           self._disconnect_locked()
+          # don't spam reconnect
+          time.sleep(1)
           continue
         finally:
           self._lock.release()
@@ -196,6 +215,7 @@ class LutronXmlDbParser(object):
     self._lutron = lutron
     self._xml_db_str = xml_db_str
     self.areas = []
+    self._occupancy_groups = {}
     self.project_name = None
 
   def parse(self):
@@ -214,6 +234,23 @@ class LutronXmlDbParser(object):
     #     <Areas ...>
     #       <Area ...>
 
+    # The GUID is unique to the repeater and is useful for constructing unique
+    # identifiers that won't change over time.
+    self._lutron.set_guid(root.find('GUID').text)
+
+    # Parse Occupancy Groups
+    # OccupancyGroups are referenced by entities in the rest of the XML.  The
+    # current structure of the code expects to go from areas -> devices ->
+    # other assets and attributes.  Here we index the groups to be bound to
+    # Areas later.
+    groups = root.find('OccupancyGroups')
+    for group_xml in groups.getiterator('OccupancyGroup'):
+      group = self._parse_occupancy_group(group_xml)
+      if group.group_number:
+        self._occupancy_groups[group.group_number] = group
+      else:
+        _LOGGER.warning("Occupancy Group has no number.  XML: %s", group_xml)
+
     # First area is useless, it's the top-level project area that defines the
     # "house". It contains the real nested Areas tree, which is the one we want.
     top_area = root.find('Areas').find('Area')
@@ -227,10 +264,15 @@ class LutronXmlDbParser(object):
   def _parse_area(self, area_xml):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
+    occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
+    occupancy_group = self._occupancy_groups.get(occupancy_group_id)
+    area_name = area_xml.get('Name')
+    if not occupancy_group:
+      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", area_name, occupancy_group_id)
     area = Area(self._lutron,
-                name=area_xml.get('Name'),
+                name=area_name,
                 integration_id=int(area_xml.get('IntegrationID')),
-                occupancy_group_id=area_xml.get('OccupancyGroupAssignedToID'))
+                occupancy_group=occupancy_group)
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
@@ -248,6 +290,7 @@ class LutronXmlDbParser(object):
         if device_xml.tag != 'Device':
           continue
         if device_xml.get('DeviceType') in (
+            'HWI_SEETOUCH_KEYPAD',
             'SEETOUCH_KEYPAD',
             'SEETOUCH_TABLETOP_KEYPAD',
             'PICO_KEYPAD',
@@ -266,12 +309,17 @@ class LutronXmlDbParser(object):
   def _parse_output(self, output_xml):
     """Parses an output, which is generally a switch controlling a set of
     lights/outlets, etc."""
-    output = Output(self._lutron,
-                    name=output_xml.get('Name'),
-                    watts=int(output_xml.get('Wattage')),
-                    output_type=output_xml.get('OutputType'),
-                    integration_id=int(output_xml.get('IntegrationID')))
-    return output
+    output_type = output_xml.get('OutputType')
+    kwargs = {
+      'name': output_xml.get('Name'),
+      'watts': int(output_xml.get('Wattage')),
+      'output_type': output_type,
+      'integration_id': int(output_xml.get('IntegrationID')),
+      'uuid': output_xml.get('UUID')
+    }
+    if output_type == 'SYSTEM_SHADE':
+      return Shade(self._lutron, **kwargs)
+    return Output(self._lutron, **kwargs)
 
   def _parse_keypad(self, keypad_xml, device_group):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
@@ -279,7 +327,8 @@ class LutronXmlDbParser(object):
                     name=keypad_xml.get('Name'),
                     keypad_type=keypad_xml.get('DeviceType'),
                     location=device_group.get('Name'),
-                    integration_id=int(keypad_xml.get('IntegrationID')))
+                    integration_id=int(keypad_xml.get('IntegrationID')),
+                    uuid=keypad_xml.get('UUID'))
     components = keypad_xml.find('Components')
     if components is None:
       return keypad
@@ -319,7 +368,8 @@ class LutronXmlDbParser(object):
                     name=name,
                     num=button_id,
                     button_type=button_type,
-                    direction=direction)
+                    direction=direction,
+                    uuid=button_xml.get('UUID'))
     return button
 
   def _parse_led(self, keypad, component_xml):
@@ -338,7 +388,8 @@ class LutronXmlDbParser(object):
     led = Led(self._lutron, keypad,
               name=('LED %d' % led_num),
               led_num=led_num,
-              component_num=component_num)
+              component_num=component_num,
+              uuid=component_xml.find('LED').get('UUID'))
     return led
 
   def _parse_motion_sensor(self, sensor_xml):
@@ -351,7 +402,18 @@ class LutronXmlDbParser(object):
     """
     return MotionSensor(self._lutron,
                         name=sensor_xml.get('Name'),
-                        integration_id=int(sensor_xml.get('IntegrationID')))
+                        integration_id=int(sensor_xml.get('IntegrationID')),
+                        uuid=sensor_xml.get('UUID'))
+
+  def _parse_occupancy_group(self, group_xml):
+    """Parses an Occupancy Group object.
+
+    These are defined outside of the areas in the XML.  Areas refer to these
+    objects by ID.
+    """
+    return OccupancyGroup(self._lutron,
+                          group_number=group_xml.get('OccupancyGroupNumber'),
+                          uuid=group_xml.get('UUID'))
 
   _GRAFIK_EYE_QS_COMPONENTS = {
     # http://www.lutron.com/TechnicalDocumentLibrary/Grafik_QS_Complete.pdf
@@ -378,7 +440,6 @@ class LutronXmlDbParser(object):
     58: (3, None),    # Column 3 Raise
   }
 
-
 class Lutron(object):
   """Main Lutron Controller class.
 
@@ -403,11 +464,23 @@ class Lutron(object):
     self._ids = {}
     self._legacy_subscribers = {}
     self._areas = []
+    self._guid = None
 
   @property
   def areas(self):
     """Return the areas that were discovered for this Lutron controller."""
     return self._areas
+
+  def set_guid(self, guid):
+    self._guid = guid
+
+  @property
+  def guid(self):
+    return self._guid
+
+  @property
+  def name(self):
+    return self._name
 
   def subscribe(self, obj, handler):
     """Subscribes to status updates of the requested object.
@@ -572,16 +645,21 @@ class LutronEntity(object):
   """Base class for all the Lutron objects we'd like to manage. Just holds basic
   common info we'd rather not manage repeatedly."""
 
-  def __init__(self, lutron, name):
+  def __init__(self, lutron, name, uuid):
     """Initializes the base class with common, basic data."""
     self._lutron = lutron
     self._name = name
     self._subscribers = []
+    self._uuid = uuid
 
   @property
   def name(self):
     """Returns the entity name (e.g. Pendant)."""
     return self._name
+
+  @property
+  def uuid(self):
+    return self._uuid
 
   def _dispatch_event(self, event: LutronEvent, params: Dict):
     """Dispatches the specified event to all the subscribers."""
@@ -627,9 +705,9 @@ class Output(LutronEntity):
     """
     LEVEL_CHANGED = 1
 
-  def __init__(self, lutron, name, watts, output_type, integration_id):
+  def __init__(self, lutron, name, watts, output_type, integration_id, uuid):
     """Initializes the Output."""
-    super(Output, self).__init__(lutron, name)
+    super(Output, self).__init__(lutron, name, uuid)
     self._watts = watts
     self._output_type = output_type
     self._level = 0.0
@@ -715,12 +793,34 @@ class Output(LutronEntity):
     return self.type != 'NON_DIM' and not self.type.startswith('CCO_')
 
 
+class Shade(Output):
+  """This is the output entity for shades in Lutron universe."""
+  _ACTION_RAISE = 2
+  _ACTION_LOWER = 3
+  _ACTION_STOP = 4
+
+  def start_raise(self):
+    """Starts raising the shade."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_RAISE)
+
+  def start_lower(self):
+    """Starts lowering the shade."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_LOWER)
+
+  def stop(self):
+    """Starts raising the shade."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_STOP)
+
+
 class KeypadComponent(LutronEntity):
   """Base class for a keypad component such as a button, or an LED."""
 
-  def __init__(self, lutron, keypad, name, num, component_num):
+  def __init__(self, lutron, keypad, name, num, component_num, uuid):
     """Initializes the base keypad component class."""
-    super(KeypadComponent, self).__init__(lutron, name)
+    super(KeypadComponent, self).__init__(lutron, name, uuid)
     self._keypad = keypad
     self._num = num
     self._component_num = component_num
@@ -764,9 +864,9 @@ class Button(KeypadComponent):
     PRESSED = 1
     RELEASED = 2
 
-  def __init__(self, lutron, keypad, name, num, button_type, direction):
+  def __init__(self, lutron, keypad, name, num, button_type, direction, uuid):
     """Initializes the Button class."""
-    super(Button, self).__init__(lutron, keypad, name, num, num)
+    super(Button, self).__init__(lutron, keypad, name, num, num, uuid)
     self._button_type = button_type
     self._direction = direction
 
@@ -789,6 +889,16 @@ class Button(KeypadComponent):
     """Triggers a simulated button press to the Keypad."""
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
                       self.component_number, Button._ACTION_PRESS)
+
+  def release(self):
+    """Triggers a simulated button release to the Keypad."""
+    self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
+                      self.component_number, Button._ACTION_RELEASE)
+
+  def tap(self):
+    """Triggers a simulated button tap to the Keypad."""
+    self.press()
+    self.release()
 
   def handle_update(self, action, params):
     """Handle the specified action on this component."""
@@ -820,9 +930,9 @@ class Led(KeypadComponent):
     """
     STATE_CHANGED = 1
 
-  def __init__(self, lutron, keypad, name, led_num, component_num):
+  def __init__(self, lutron, keypad, name, led_num, component_num, uuid):
     """Initializes the Keypad LED class."""
-    super(Led, self).__init__(lutron, keypad, name, led_num, component_num)
+    super(Led, self).__init__(lutron, keypad, name, led_num, component_num, uuid)
     self._state = False
     self._query_waiters = _RequestHelper()
 
@@ -890,9 +1000,9 @@ class Keypad(LutronEntity):
   """
   _CMD_TYPE = 'DEVICE'
 
-  def __init__(self, lutron, name, keypad_type, location, integration_id):
+  def __init__(self, lutron, name, keypad_type, location, integration_id, uuid):
     """Initializes the Keypad object."""
-    super(Keypad, self).__init__(lutron, name)
+    super(Keypad, self).__init__(lutron, name, uuid)
     self._buttons = []
     self._leds = []
     self._components = {}
@@ -999,9 +1109,9 @@ class MotionSensor(LutronEntity):
     """
     STATUS_CHANGED = 1
 
-  def __init__(self, lutron, name, integration_id):
+  def __init__(self, lutron, name, integration_id, uuid):
     """Initializes the motion sensor object."""
-    super(MotionSensor, self).__init__(lutron, name)
+    super(MotionSensor, self).__init__(lutron, name, uuid)
     self._integration_id = integration_id
     self._battery = None
     self._power = None
@@ -1093,18 +1203,28 @@ class OccupancyGroup(LutronEntity):
     """
     OCCUPANCY = 1
 
-  def __init__(self, lutron, area):
-    super(OccupancyGroup, self).__init__(lutron, 'Occ {}'.format(area.name))
+  def __init__(self, lutron, group_number, uuid):
+    super(OccupancyGroup, self).__init__(lutron, None, uuid)
+    self._area = None
+    self._group_number = group_number
+    self._integration_id = None
+    self._state = None
+    self._query_waiters = _RequestHelper()
+
+  def _bind_area(self, area):
     self._area = area
     self._integration_id = area.id
-    self._state = None
     self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
-    self._query_waiters = _RequestHelper()
 
   @property
   def id(self):
     """The integration id"""
     return self._integration_id
+
+  @property
+  def group_number(self):
+    """The OccupancyGroupNumber"""
+    return self._group_number
 
   @property
   def name(self):
@@ -1153,15 +1273,16 @@ class OccupancyGroup(LutronEntity):
 
 class Area(object):
   """An area (i.e. a room) that contains devices/outputs/etc."""
-  def __init__(self, lutron, name, integration_id, occupancy_group_id):
+  def __init__(self, lutron, name, integration_id, occupancy_group):
     self._lutron = lutron
     self._name = name
     self._integration_id = integration_id
-    self._occupancy_group_id = occupancy_group_id
-    self._occupancy_group = None
+    self._occupancy_group = occupancy_group
     self._outputs = []
     self._keypads = []
     self._sensors = []
+    if occupancy_group:
+      occupancy_group._bind_area(self)
 
   def add_output(self, output):
     """Adds an output object that's part of this area, only used during
@@ -1177,8 +1298,6 @@ class Area(object):
     """Adds a motion sensor object that's part of this area, only used during
     initial parsing."""
     self._sensors.append(sensor)
-    if not self._occupancy_group:
-      self._occupancy_group = OccupancyGroup(self._lutron, self)
 
   @property
   def name(self):
