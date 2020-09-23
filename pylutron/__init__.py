@@ -808,7 +808,7 @@ class Button(KeypadComponent):
     PRESS: The button has been pressed, or the contact (CCI) is closed.
         Params: None
 
-    RELEASE: The button has been released., or the contact (CCI) is open. Not all buttons
+    RELEASE: The button has been released, or the contact (CCI) is open. Not all buttons
               generate this event.
         Params: None
 
