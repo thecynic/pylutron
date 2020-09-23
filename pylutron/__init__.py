@@ -341,7 +341,7 @@ class LutronXmlDbParser(object):
     button_type = button_xml.get('ButtonType')
     direction = button_xml.get('Direction')
     led_logic = 0 if button_xml.get('LedLogic') is None else int(button_xml.get('LedLogic'))
-    name = f"keypad {keypad.id}: Btn {component_number}"
+    name = f"Btn {component_number}"
 
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
@@ -362,7 +362,7 @@ class LutronXmlDbParser(object):
     cci_xml = component_xml.find('CCI')
     cci_type = cci_xml.get('ButtonType')
     led_logic = cci_xml.get('LedLogic')
-    name = f"keypad {keypad.id}: CCI {component_number}"
+    name = f"CCI {component_number}"
   
     button = Button(self._lutron, keypad,
                     name=name,
@@ -383,7 +383,7 @@ class LutronXmlDbParser(object):
     elif keypad.type == 'PHANTOM':
       led_base = 2000
     led_num = component_num - led_base
-    name = f"keypad {keypad.id}: LED {led_num}"
+    name = f"LED {led_num}"
     led = Led(self._lutron, keypad,
               name=name,
               led_num=led_num,
