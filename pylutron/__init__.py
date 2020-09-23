@@ -306,7 +306,7 @@ class LutronXmlDbParser(object):
 
   def _parse_keypad(self, keypad_xml, device_group):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
-    # keypad standard name is CSD 001, we use the integration ID nme instead
+    # in HW the keypad standard name is CSD 001, we use the integration ID name instead
     name = keypad_xml.get('Name') 
     if (keypad_xml.get('Name') == "CSD 001"):
       name = f"keypad {keypad_xml.get('IntegrationID')}"
@@ -431,9 +431,8 @@ class Lutron(object):
   @property
   def areas(self):
     """Return the areas that were discovered for this Lutron controller."""
-    # return self._areas
-    return tuple(area for area in self._areas)
-
+    return self._areas
+    
   def subscribe(self, obj, handler):
     """Subscribes to status updates of the requested object.
 
