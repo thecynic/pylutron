@@ -132,13 +132,13 @@ class LutronConnection(threading.Thread):
     self._telnet.write(self._password + b'\r\n')
     self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
 
-    self._send_locked("#MONITORING,12,2")
-    self._send_locked("#MONITORING,255,2")
-    self._send_locked("#MONITORING,3,1")
-    self._send_locked("#MONITORING,4,1")
-    self._send_locked("#MONITORING,5,1")
-    self._send_locked("#MONITORING,6,1")
-    self._send_locked("#MONITORING,8,1")
+    self._send_locked("#MONITORING,12,2")   #  Disable prompt
+    self._send_locked("#MONITORING,255,2")  #  Disable all monitoring
+    self._send_locked("#MONITORING,3,1")    #  Enable Button Monitoring
+    self._send_locked("#MONITORING,4,1")    #  Enable Led Monitoring
+    self._send_locked("#MONITORING,5,1")    #  Enable Zone Monitoring
+    self._send_locked("#MONITORING,6,1")    #  Enable Occupancy Monitoring
+    self._send_locked("#MONITORING,8,1")    #  Enable Scene Monitoring
 
   def _disconnect_locked(self):
     """Closes the current connection. Assume self._lock is held."""
