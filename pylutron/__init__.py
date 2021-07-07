@@ -244,7 +244,7 @@ class LutronXmlDbParser(object):
     # other assets and attributes.  Here we index the groups to be bound to
     # Areas later.
     groups = root.find('OccupancyGroups')
-    for group_xml in groups.getiterator('OccupancyGroup'):
+    for group_xml in groups.iter('OccupancyGroup'):
       group = self._parse_occupancy_group(group_xml)
       if group.group_number:
         self._occupancy_groups[group.group_number] = group
@@ -256,7 +256,7 @@ class LutronXmlDbParser(object):
     top_area = root.find('Areas').find('Area')
     self.project_name = top_area.get('Name')
     areas = top_area.find('Areas')
-    for area_xml in areas.getiterator('Area'):
+    for area_xml in areas.iter('Area'):
       area = self._parse_area(area_xml)
       self.areas.append(area)
     return True
