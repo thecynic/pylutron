@@ -246,9 +246,10 @@ class LutronXmlDbParser(object):
     groups = root.find('OccupancyGroups')
     for group_xml in groups.iter('OccupancyGroup'):
       group = self._parse_occupancy_group(group_xml)
-      if group.group_number:
-        self._occupancy_groups[group.group_number] = group
-      else:
+      try:
+        if group.group_number:
+          self._occupancy_groups[group.group_number] = group
+      except:
         _LOGGER.warning("Occupancy Group has no number.  XML: %s", group_xml)
 
     # First area is useless, it's the top-level project area that defines the
@@ -395,9 +396,15 @@ class LutronXmlDbParser(object):
     These are defined outside of the areas in the XML.  Areas refer to these
     objects by ID.
     """
-    return OccupancyGroup(self._lutron,
+    try:
+      if group_xml.findall(".//Action"):
+        _LOGGER.debug(f"returning an occupancy group because an Action was found")
+        return OccupancyGroup(self._lutron,
                           group_number=group_xml.get('OccupancyGroupNumber'),
                           uuid=group_xml.get('UUID'))
+    except:
+      _LOGGER.error(f"threw an exception while looking for an Occupancy Group Action")
+      return None
 
 class Lutron(object):
   """Main Lutron Controller class.
