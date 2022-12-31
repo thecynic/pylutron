@@ -810,6 +810,7 @@ class Button(KeypadComponent):
   events for (button presses)."""
   _ACTION_PRESS = 3
   _ACTION_RELEASE = 4
+  _ACTION_DOUBLE_CLICK = 6
 
   class Event(LutronEvent):
     """Button events that can be generated.
@@ -820,9 +821,14 @@ class Button(KeypadComponent):
     RELEASED: The button has been released. Not all buttons
               generate this event.
         Params: None
+
+    DOUBLE_CLICKED: The button was double-clicked. Not all buttons
+              generate this event.
+        Params: None
     """
     PRESSED = 1
     RELEASED = 2
+    DOUBLE_CLICKED = 3
 
   def __init__(self, lutron, keypad, name, num, button_type, direction, uuid):
     """Initializes the Button class."""
@@ -855,6 +861,11 @@ class Button(KeypadComponent):
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
                       self.component_number, Button._ACTION_RELEASE)
 
+  def double_click(self):
+    """Triggers a simulated button double_click to the Keypad."""
+    self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
+                      self.component_number, Button._ACTION_DOUBLE_CLICK)
+
   def tap(self):
     """Triggers a simulated button tap to the Keypad."""
     self.press()
@@ -866,7 +877,8 @@ class Button(KeypadComponent):
                   self._keypad.name, self, action, params))
     ev_map = {
         Button._ACTION_PRESS: Button.Event.PRESSED,
-        Button._ACTION_RELEASE: Button.Event.RELEASED
+        Button._ACTION_RELEASE: Button.Event.RELEASED,
+        Button._ACTION_DOUBLE_CLICK: Button.Event.DOUBLE_CLICKED
     }
     if action not in ev_map:
       _LOGGER.debug("Unknown action %d for button %d in keypad %s" % (
