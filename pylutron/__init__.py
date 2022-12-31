@@ -296,7 +296,8 @@ class LutronXmlDbParser(object):
             'PICO_KEYPAD',
             'HYBRID_SEETOUCH_KEYPAD',
             'MAIN_REPEATER',
-            'HOMEOWNER_KEYPAD'):
+            'HOMEOWNER_KEYPAD',
+            'GRAFIK_T_HYBRID_KEYPAD'):
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
