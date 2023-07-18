@@ -4,9 +4,9 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'pylutron',
-    version = '0.2.6',
+    version = '0.3',
     license = 'MIT',
-    description = 'Python library for Lutron RadioRA 2',
+    description = 'Python library for Lutron RadioRA 2 & HomeWorks',
     author = 'Dima Zavin',
     author_email = 'thecynic@gmail.com',
     url = 'http://github.com/thecynic/pylutron',
@@ -16,7 +16,7 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.11',
         'Topic :: Home Automation',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
