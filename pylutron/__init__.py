@@ -139,6 +139,7 @@ class LutronConnection(threading.Thread):
     self._send_locked("#MONITORING,5,1")
     self._send_locked("#MONITORING,6,1")
     self._send_locked("#MONITORING,8,1")
+    self._send_locked("#MONITORING,17,1")
 
   def _disconnect_locked(self):
     """Closes the current connection. Assume self._lock is held."""
@@ -217,6 +218,7 @@ class LutronXmlDbParser(object):
     self.areas = []
     self._occupancy_groups = {}
     self.project_name = None
+    self.hvacs = []
 
   def parse(self):
     """Main entrypoint into the parser. It interprets and creates all the
@@ -259,7 +261,27 @@ class LutronXmlDbParser(object):
     for area_xml in areas.iter('Area'):
       area = self._parse_area(area_xml)
       self.areas.append(area)
+
+    # HVAC controllers are in their own parent node so we need to parse these in their own loop
+    # in this version we only get the core values and ignore any schedules.
+    # schedules could be added in a later version
+    hvac_area = root.find('HVACs')
+    for hvac_xml in hvac_area.iter('HVAC'):
+      hvac = self._parse_hvac(hvac_xml)
+      self.hvacs.append(hvac)
     return True
+  
+  def _parse_hvac(self, hvac_xml):
+    """Parses an HVAC, which is generally a thermostat controlling a heating ventilation and cooling unit"""
+    kwargs = {
+      'name': hvac_xml.get('Name'),
+      'integration_id': int(hvac_xml.get('IntegrationID')),
+      'uuid': hvac_xml.get('UUID'),
+      'temp_units': int(hvac_xml.get('TemperatureUnits')),
+      'avail_op_modes': hvac_xml.get('AvailableOperatingModes'),
+      'avail_fan_modes': hvac_xml.get('AvailableFanModes'),
+    }
+    return HVAC(self._lutron, **kwargs)
 
   def _parse_area(self, area_xml):
     """Parses an Area tag, which is effectively a room, depending on how the
@@ -649,6 +671,83 @@ class LutronEntity(object):
     """
     return False
 
+class HVAC(LutronEntity):
+  """This is the HVAC entity in Lutron universe. This generally refers to a
+  thermostat"""
+  _CMD_TYPE = 'HVAC'
+  _ACTION_TEMP_LEVEL_F = 1
+
+  class Event(LutronEvent):
+    """Output events that can be generated.
+
+    LEVEL_CHANGED: The output level has changed.
+        Params:
+          level: new output level (float)
+    """
+    TEMP_CHANGED = 2
+    MODE_CHANGED = 3
+    FANM_CHANGED = 4
+
+  def __init__(self, lutron, name, integration_id, uuid):
+    """Initializes the Output."""
+    super(HVAC, self).__init__(lutron, name, uuid)
+    self._query_waiters = _RequestHelper()
+    self._integration_id = integration_id
+    self._lutron.register_id(HVAC._CMD_TYPE, self)
+
+  def __str__(self):
+    """Returns a pretty-printed string for this object."""
+    return 'HVAC name: "%s" id: %d' % (
+        self._name, self._integration_id)
+
+  def __repr__(self):
+    """Returns a stringified representation of this object."""
+    return str({'name': self._name, 'id': self._integration_id})
+
+  @property
+  def id(self):
+    """The integration id"""
+    return self._integration_id
+
+  def handle_update(self, args):
+    """Handles an event update for this object, e.g. temp level change."""
+    _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
+    state = int(args[0])
+    if state != HVAC._ACTION_TEMP_LEVEL_F:
+      return False
+    level = float(args[1])
+    _LOGGER.debug("Updating %d(%s): s=%d l=%f" % (
+        self._integration_id, self._name, state, level))
+    self._level = level
+    self._query_waiters.notify()
+    self._dispatch_event(HVAC.Event.TEMP_CHANGED, {'level': self._level})
+    return True
+
+  def __do_query_level(self):
+    """Helper to perform the actual query the current temp level of the
+    thermostat. For pure on/off loads the result is either 0.0 or 100.0."""
+    self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC._ACTION_TEMP_LEVEL_F)
+
+  def last_level(self):
+    """Returns last cached value of the temp level, no query is performed."""
+    return self._level
+
+  @property
+  def level(self):
+    """Returns the current temp level by querying the remote controller."""
+    ev = self._query_waiters.request(self.__do_query_level)
+    ev.wait(1.0)
+    return self._level
+
+  @level.setter
+  def level(self, new_level):
+    """Sets the new temp level."""
+    if self._level == new_level:
+      return
+    self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+        HVAC._ACTION_TEMP_LEVEL_F, "%.2f" % new_level)
+    self._level = new_level
 
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
@@ -1219,7 +1318,7 @@ class OccupancyGroup(LutronEntity):
 
   def __repr__(self):
     """Returns a stringified representation of this object."""
-    return str({'area_name' : self.area.name,
+    return str({'area_name' : self._area.name,
                 'id' : self.id,
                 'state' : self.state})
 
