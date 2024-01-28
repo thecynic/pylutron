@@ -7,6 +7,7 @@ for enumerating and controlling the loads are supported.
 __author__ = "Dima Zavin"
 __copyright__ = "Copyright 2016, Dima Zavin"
 
+from datetime import timedelta
 from enum import Enum
 import logging
 import socket
