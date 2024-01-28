@@ -725,14 +725,18 @@ class Output(LutronEntity):
   @level.setter
   def level(self, new_level):
     """Sets the new output level."""
+    self.set_level(new_level)
+
+  def set_level(self, new_level, fade_time_seconds=2):
+    """Sets tne new output level."""
     if self._level == new_level:
       return
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level)
+        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, str(timedelta(seconds=fade_time_seconds)))
     self._level = new_level
 
-## At some later date, we may want to also specify fade and delay times
-#  def set_level(self, new_level, fade_time, delay):
+## At some later date, we may want to also specify delay times
+#  def set_level(self, new_level, fade_time_seconds, delay):
 #    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
 #        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
 
