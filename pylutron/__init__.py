@@ -505,7 +505,7 @@ class Lutron(object):
   def send(self, op, cmd, integration_id, *args):
     """Formats and sends the requested command to the Lutron controller."""
     out_cmd = ",".join(
-        (cmd, str(integration_id)) + tuple((str(x) for x in args)))
+        (cmd, str(integration_id)) + tuple((str(x) for x in args if x is not None)))
     self._conn.send(op + out_cmd)
 
   def load_xml_db(self, cache_path=None):
@@ -728,8 +728,8 @@ class Output(LutronEntity):
     """Sets the new output level."""
     self.set_level(new_level)
 
-  def set_level(self, new_level, fade_time_seconds=2):
-    """Sets tne new output level."""
+  def set_level(self, new_level, fade_time_seconds=None):
+    """Sets the new output level."""
     if self._level == new_level:
       return
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
