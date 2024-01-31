@@ -656,6 +656,7 @@ class Output(LutronEntity):
   switched/dimmed load, e.g. light fixture, outlet, etc."""
   _CMD_TYPE = 'OUTPUT'
   _ACTION_ZONE_LEVEL = 1
+  _ACTION_ZONE_FLASH = 5
 
   class Event(LutronEvent):
     """Output events that can be generated.
@@ -728,17 +729,25 @@ class Output(LutronEntity):
     """Sets the new output level."""
     self.set_level(new_level)
 
+  @staticmethod
+  def _fade_time(seconds):
+    if seconds is None:
+      return None
+    return str(timedelta(seconds=seconds))
+
   def set_level(self, new_level, fade_time_seconds=None):
     """Sets the new output level."""
     if self._level == new_level:
       return
-    if fade_time_seconds is not None:
-      fade_time = str(timedelta(seconds=fade_time_seconds))
-    else:
-      fade_time = None
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, fade_time)
+        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, self._fade_time(fade_time_seconds))
     self._level = new_level
+
+  def flash(self, fade_time_seconds=None):
+    """Flashes the zone until a new level is set."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_ZONE_FLASH, self._fade_time(fade_time_seconds))
+    
 
 ## At some later date, we may want to also specify delay times
 #  def set_level(self, new_level, fade_time_seconds, delay):
