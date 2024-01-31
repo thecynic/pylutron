@@ -732,8 +732,12 @@ class Output(LutronEntity):
     """Sets the new output level."""
     if self._level == new_level:
       return
+    if fade_time_seconds is not None:
+      fade_time = str(timedelta(seconds=fade_time_seconds))
+    else:
+      fade_time = None
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, str(timedelta(seconds=fade_time_seconds)))
+        Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, fade_time)
     self._level = new_level
 
 ## At some later date, we may want to also specify delay times
