@@ -688,7 +688,7 @@ class HVAC(LutronEntity):
     MODE_CHANGED = 3
     FANM_CHANGED = 4
 
-  def __init__(self, lutron, name, integration_id, uuid):
+  def __init__(self, lutron, name, integration_id, uuid, temp_units, avail_op_modes, avail_fan_modes):
     """Initializes the Output."""
     super(HVAC, self).__init__(lutron, name, uuid)
     self._query_waiters = _RequestHelper()
