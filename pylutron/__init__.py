@@ -456,6 +456,11 @@ class Lutron(object):
   def areas(self):
     """Return the areas that were discovered for this Lutron controller."""
     return self._areas
+  
+  @property
+  def hvacs(self):
+    """Return the hvacs that were discovered for this Lutron controller."""
+    return self._hvacs
 
   def set_guid(self, guid):
     self._guid = guid
