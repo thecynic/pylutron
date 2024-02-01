@@ -214,11 +214,12 @@ class LutronXmlDbParser(object):
   def __init__(self, lutron, xml_db_str):
     """Initializes the XML parser, takes the raw XML data as string input."""
     self._lutron = lutron
+    self._occupancy_groups = {}
     self._xml_db_str = xml_db_str
     self.areas = []
-    self._occupancy_groups = {}
-    self.project_name = None
     self.hvacs = []
+    self.project_name = None
+    
 
   def parse(self):
     """Main entrypoint into the parser. It interprets and creates all the
@@ -652,7 +653,7 @@ class LutronEntity(object):
     """Subscribes to events from this entity.
 
     handler: A callable object that takes the following arguments (in order)
-             obj: the LutrongEntity object that generated the event
+             obj: the LutronEntity object that generated the event
              context: user-supplied (to subscribe()) context object
              event: the LutronEvent that was generated.
              params: a dict of event-specific parameters
@@ -684,11 +685,18 @@ class HVAC(LutronEntity):
         Params:
           level: new output level (float)
     """
-    TEMP_CHANGED = 2
-    MODE_CHANGED = 3
-    FANM_CHANGED = 4
+    TEMP_CURRENT_F = 1 #new
+    TEMP_SETPOINT_F = 2  #TEMP_CHANGED = 2
+    OPERATING_MODE = 3  #MODE_CHANGED = 3
+    FAN_MODE = 4  #FANM_CHANGED = 4
+    ECO_MODE = 5
+    ECO_OFFSET = 6
+    SYSTEM_MODE = 11
+    CALL_STATUS = 14
+    TEMP_CURRENT_C = 15
+    TEMP_SETPOINT_C = 16
 
-  def __init__(self, lutron, name, integration_id, uuid):
+  def __init__(self, lutron, name, integration_id, uuid, temp_units, avail_op_modes, avail_fan_modes):
     """Initializes the Output."""
     super(HVAC, self).__init__(lutron, name, uuid)
     self._query_waiters = _RequestHelper()
@@ -720,7 +728,7 @@ class HVAC(LutronEntity):
         self._integration_id, self._name, state, level))
     self._level = level
     self._query_waiters.notify()
-    self._dispatch_event(HVAC.Event.TEMP_CHANGED, {'level': self._level})
+    self._dispatch_event(HVAC.Event.TEMP_SETPOINT_F, {'level': self._level})
     return True
 
   def __do_query_level(self):
