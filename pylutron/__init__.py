@@ -449,6 +449,7 @@ class Lutron(object):
     self._ids = {}
     self._legacy_subscribers = {}
     self._areas = []
+    self._hvacs = []
     self._guid = None
 
   @property
