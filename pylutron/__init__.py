@@ -676,25 +676,55 @@ class HVAC(LutronEntity):
   """This is the HVAC entity in Lutron universe. This generally refers to a
   thermostat"""
   _CMD_TYPE = 'HVAC'
-  _ACTION_TEMP_LEVEL_F = 1
+
+  class FANModes(Enum):
+    """Possible fan modes"""
+    AUTO = '1'
+    ON = '2'
+    CYCLER = '3'
+    NO_FAN = '4'
+    HIGH = '5'
+    MEDIUM = '6'
+    LOW = '7'
+    TOP = '8'
+
+    @classmethod
+    def get_key(cls, value):
+        for key, val in cls.__dict__.items():
+            if val == value:
+                return key
+        return None
+  
+  class OPERModes(Enum):
+    """Possible operating modes"""
+    OFF = '1'
+    HEAT = '2'
+    COOL = '3'
+    AUTO = '4'
+    EM_HEAT = '5'
+    LOCKED = '6'
+    FAN = '7'
+    DRY = '8'
+
+    @classmethod
+    def get_key(cls, value):
+        for key, val in cls.__dict__.items():
+            if val == value:
+                return key
+        return None
 
   class Event(LutronEvent):
-    """Output events that can be generated.
-
-    LEVEL_CHANGED: The output level has changed.
-        Params:
-          level: new output level (float)
-    """
-    TEMP_CURRENT_F = 1 #new
-    TEMP_SETPOINT_F = 2  #TEMP_CHANGED = 2
-    OPERATING_MODE = 3  #MODE_CHANGED = 3
-    FAN_MODE = 4  #FANM_CHANGED = 4
+    """Output events that can be generated."""
+    TEMP_CURRENT_F = 1
+    TEMP_SETPOINTS_F = 2
+    OPERATING_MODE = 3
+    FAN_MODE = 4
     ECO_MODE = 5
     ECO_OFFSET = 6
     SYSTEM_MODE = 11
     CALL_STATUS = 14
     TEMP_CURRENT_C = 15
-    TEMP_SETPOINT_C = 16
+    TEMP_SETPOINTS_C = 16
 
   def __init__(self, lutron, name, integration_id, uuid, temp_units, avail_op_modes, avail_fan_modes):
     """Initializes the Output."""
@@ -702,6 +732,14 @@ class HVAC(LutronEntity):
     self._query_waiters = _RequestHelper()
     self._integration_id = integration_id
     self._lutron.register_id(HVAC._CMD_TYPE, self)
+    self._temp_units = "F" if temp_units==1 else "C"
+    self._operating_modes = avail_op_modes.split()
+    self._fan_modes = avail_fan_modes.split()
+    self._current_fan = None
+    self._current_mode = None
+    self._current_temp = None
+    self._setpoint_cool = None
+    self._setpoint_heat = None
 
   def __str__(self):
     """Returns a pretty-printed string for this object."""
@@ -711,7 +749,7 @@ class HVAC(LutronEntity):
   def __repr__(self):
     """Returns a stringified representation of this object."""
     return str({'name': self._name, 'id': self._integration_id})
-
+  
   @property
   def id(self):
     """The integration id"""
@@ -720,42 +758,85 @@ class HVAC(LutronEntity):
   def handle_update(self, args):
     """Handles an event update for this object, e.g. temp level change."""
     _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
-    state = int(args[0])
-    if state != HVAC._ACTION_TEMP_LEVEL_F:
-      return False
-    level = float(args[1])
-    _LOGGER.debug("Updating %d(%s): s=%d l=%f" % (
-        self._integration_id, self._name, state, level))
-    self._level = level
-    self._query_waiters.notify()
-    self._dispatch_event(HVAC.Event.TEMP_SETPOINT_F, {'level': self._level})
+    
+    def _u_current_temp(action, temp):
+      """Handles current temp interaction"""
+      self._current_temp = float(temp)
+      self._query_waiters.notify()
+      self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp': self._current_temp})
+      return True
+
+    def _u_setpoints(action, heat, cool):
+      """Handles setpoint interaction"""
+      self._setpoint_cool = float(cool)
+      self._setpoint_heat = float(heat)
+      self._query_waiters.notify()
+      self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'current_mode': self._current_mode})
+      return True
+  
+    def _u_operating_mode(action, mode):
+      """Handles operating mode interaction"""
+      self._current_mode = OPERModes.get_key(mode)
+      self._query_waiters.notify()
+      self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
+      return True
+  
+    def _u_fan_mode(action, mode):
+      """Handles fan mode interaction"""
+      self._current_fan = FANModes.get_key(mode)
+      self._query_waiters.notify()
+      self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
+      return True
+
+    def _u_call_status(action, mode):
+      """Handles call status"""
+
+    event = int(args[0])
+    handler_functions = {
+        Event.TEMP_CURRENT_F: (_u_current_temp, 1),
+        Event.TEMP_SETPOINTS_F: (_u_setpoints, 2),
+        Event.OPERATING_MODE: (_u_operating_mode, 1),
+        Event.FAN_MODE: (_u_fan_mode, 1),
+        Event.CALL_STATUS: (_u_call_status,1)
+    }
+    if event in handler_functions:
+        handler, num_args = handler_functions[event]
+        if num_args == 1:
+            handler(args[1])
+        elif num_args == 2:
+            handler(args[1], args[2])
+    
+    #level = float(args[1])
+    #self._level = level
+    #self._query_waiters.notify()
+    #self._dispatch_event(HVAC.Event.TEMP_SETPOINT_F, {'level': self._level})
     return True
 
-  def __do_query_level(self):
+  def __do_query_current_temp(self):
     """Helper to perform the actual query the current temp level of the
-    thermostat. For pure on/off loads the result is either 0.0 or 100.0."""
+    thermostat."""
     self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            HVAC._ACTION_TEMP_LEVEL_F)
+            Event.TEMP_CURRENT_F)
 
-  def last_level(self):
+  def last_temp(self):
     """Returns last cached value of the temp level, no query is performed."""
-    return self._level
+    return self._current_temp
 
   @property
-  def level(self):
+  def current_temp(self):
     """Returns the current temp level by querying the remote controller."""
-    ev = self._query_waiters.request(self.__do_query_level)
+    ev = self._query_waiters.request(self.__do_query_current_temp)
     ev.wait(1.0)
-    return self._level
+    return self._current_temp
 
-  @level.setter
-  def level(self, new_level):
+  @current_temp.setter
+  def current_temp(self, new_temp):
     """Sets the new temp level."""
-    if self._level == new_level:
+    if self._current_temp == new_temp:
       return
     self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
-        HVAC._ACTION_TEMP_LEVEL_F, "%.2f" % new_level)
-    self._level = new_level
+        Event.TEMP_CURRENT_F, "%.2f" % new_temp)
+    self._current_temp = new_temp
 
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
