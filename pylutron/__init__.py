@@ -268,12 +268,14 @@ class LutronXmlDbParser(object):
     # schedules could be added in a later version
     hvac_area = root.find('HVACs')
     for hvac_xml in hvac_area.iter('HVAC'):
+      _LOGGER.info('################ FOUND HVAC')
       hvac = self._parse_hvac(hvac_xml)
       self.hvacs.append(hvac)
     return True
   
   def _parse_hvac(self, hvac_xml):
     """Parses an HVAC, which is generally a thermostat controlling a heating ventilation and cooling unit"""
+    _LOGGER.info('################ START PARSING HVAC %s', hvac_xml.get('Name'))
     kwargs = {
       'name': hvac_xml.get('Name'),
       'integration_id': int(hvac_xml.get('IntegrationID')),
@@ -740,6 +742,7 @@ class HVAC(LutronEntity):
     self._current_temp = None
     self._setpoint_cool = None
     self._setpoint_heat = None
+    _LOGGER.info('################ DONE INIT HVAC ')
 
   def __str__(self):
     """Returns a pretty-printed string for this object."""
