@@ -559,7 +559,7 @@ class Lutron(object):
     self._areas = parser.areas
     self._name = parser.project_name
 
-    _LOGGER.info('Found Lutron project: %s, %d areas' % (
+    _LOGGER.info('Found Lutron projection: %s, %d areas' % (
         self._name, len(self.areas)))
 
     if cache_path and loaded_from == 'repeater':
