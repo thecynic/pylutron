@@ -690,13 +690,13 @@ class HVAC(LutronEntity):
 
   class FANModes(Enum):
     """Possible fan modes"""
-    AUTO = '1'
-    ON = '2'
+    Auto = '1'
+    On = '2'
     CYCLER = '3'
     NO_FAN = '4'
-    HIGH = '5'
-    MEDIUM = '6'
-    LOW = '7'
+    High = '5'
+    Medium = '6'
+    Low = '7'
     TOP = '8'
 
     @classmethod
@@ -708,14 +708,14 @@ class HVAC(LutronEntity):
   
   class OPERModes(Enum):
     """Possible operating modes"""
-    OFF = '1'
-    HEAT = '2'
-    COOL = '3'
-    AUTO = '4'
+    Off = '1'
+    Heat = '2'
+    Cool = '3'
+    Auto = '4'
     EM_HEAT = '5'
-    LOCKED = '6'
-    FAN = '7'
-    DRY = '8'
+    Locked = '6'
+    Fan = '7'
+    Dry = '8'
 
     @classmethod
     def get_key(cls, value):
@@ -850,6 +850,35 @@ class HVAC(LutronEntity):
         Event.TEMP_CURRENT_F, "%.2f" % new_temp)
     self._current_temp = new_temp
 
+
+
+  def __do_query_current_mode(self):
+    """Helper to perform the actual query the current temp level of the
+    thermostat."""
+    self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            Event.OPERATING_MODE)
+
+  def last_mode(self):
+    """Returns last cached value of the temp level, no query is performed."""
+    return self._current_mode
+
+  @property
+  def current_mode(self):
+    """Returns the current temp level by querying the remote controller."""
+    ev = self._query_waiters.request(self.__do_query_current_mode)
+    ev.wait(1.0)
+    return self._current_mode
+
+  @current_mode.setter
+  def current_mode(self, new_mode):
+    """Sets the new temp level."""
+    if self._current_mode == new_mode:
+      return
+    self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+        Event.OPERATING_MODE, new_mode)
+    self._current_mode = new_mode
+
+    
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
   switched/dimmed load, e.g. light fixture, outlet, etc."""
