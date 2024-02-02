@@ -270,7 +270,9 @@ class LutronXmlDbParser(object):
     for hvac_xml in hvac_area.iter('HVAC'):
       _LOGGER.info('################ FOUND HVAC')
       hvac = self._parse_hvac(hvac_xml)
+      _LOGGER.info('################ FOUND HVAC %s', vars(hvac))
       self.hvacs.append(hvac)
+
     return True
   
   def _parse_hvac(self, hvac_xml):
@@ -565,6 +567,7 @@ class Lutron(object):
     parser = LutronXmlDbParser(lutron=self, xml_db_str=xml_db)
     assert(parser.parse())     # throw our own exception
     self._areas = parser.areas
+    self._hvacs = parser.hvacs
     self._name = parser.project_name
 
     _LOGGER.info('Found Lutron projection: %s, %d areas' % (
@@ -927,11 +930,6 @@ class Output(LutronEntity):
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_ZONE_LEVEL, "%.2f" % new_level)
     self._level = new_level
-
-## At some later date, we may want to also specify fade and delay times
-#  def set_level(self, new_level, fade_time, delay):
-#    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
-#        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
 
   @property
   def watts(self):
