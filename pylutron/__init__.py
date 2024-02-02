@@ -894,6 +894,7 @@ class HVAC(LutronEntity):
     """Sets the new temp level."""
     if self._current_mode == new_mode:
       return
+    _LOGGER.info('################ HVAC %s', str(HVAC.Event.OPERATING_MODE))
     self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
         HVAC.Event.OPERATING_MODE, new_mode)
     self._current_mode = new_mode
