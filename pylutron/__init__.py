@@ -730,7 +730,7 @@ class HVAC(LutronEntity):
     EmgHeat = '9'
     Dry = '10'
 
-  class Event(LutronEvent):
+  class Event(LutronEvent,EnumWithReverseMapping):
     """Output events that can be generated."""
     TEMP_CURRENT_F = 1
     TEMP_SETPOINTS_F = 2
