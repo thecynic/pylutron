@@ -829,11 +829,11 @@ class HVAC(LutronEntity):
 
     event = int(args[0])
     handler_functions = {
-        Event.TEMP_CURRENT_F: (_u_current_temp, 1),
-        Event.TEMP_SETPOINTS_F: (_u_setpoints, 2),
-        Event.OPERATING_MODE: (_u_operating_mode, 1),
-        Event.FAN_MODE: (_u_fan_mode, 1),
-        Event.CALL_STATUS: (_u_call_status,1)
+        HVAC.Event.TEMP_CURRENT_F: (_u_current_temp, 1),
+        HVAC.Event.TEMP_SETPOINTS_F: (_u_setpoints, 2),
+        HVAC.Event.OPERATING_MODE: (_u_operating_mode, 1),
+        HVAC.Event.FAN_MODE: (_u_fan_mode, 1),
+        HVAC.Event.CALL_STATUS: (_u_call_status,1)
     }
     if event in handler_functions:
         handler, num_args = handler_functions[event]
@@ -848,7 +848,7 @@ class HVAC(LutronEntity):
     """Helper to perform the actual query the current temp level of the
     thermostat."""
     self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            Event.TEMP_CURRENT_F)
+            HVAC.Event.TEMP_CURRENT_F)
 
   def last_temp(self):
     """Returns last cached value of the temp level, no query is performed."""
