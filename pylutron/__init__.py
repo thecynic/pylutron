@@ -689,7 +689,12 @@ class HVAC(LutronEntity):
   thermostat"""
   _CMD_TYPE = 'HVAC'
 
-  class FANModes(Enum):
+  class EnumWithReverseMapping(Enum):
+    @classmethod
+    def get_key(cls, value):
+        return cls._value2member_map_.get(value)
+
+  class FANModes(EnumWithReverseMapping):
     """Possible fan modes"""
     Auto = '1'
     On = '2'
@@ -699,15 +704,8 @@ class HVAC(LutronEntity):
     Medium = '6'
     Low = '7'
     TOP = '8'
-
-    @classmethod
-    def get_key(cls, value):
-        for key, val in cls.__dict__.items():
-            if val == value:
-                return key
-        return None
   
-  class OPERModes(Enum):
+  class OPERModes(EnumWithReverseMapping):
     """Possible operating modes"""
     Off = '1'
     Heat = '2'
@@ -718,12 +716,19 @@ class HVAC(LutronEntity):
     Fan = '7'
     Dry = '8'
 
-    @classmethod
-    def get_key(cls, value):
-        for key, val in cls.__dict__.items():
-            if val == value:
-                return key
-        return None
+  class CALL_STATUS(EnumWithReverseMapping):
+    """Possible status"""
+    OffLastHeat = '0'
+    Heat1 = '1'
+    Heat12 = '2'
+    Heat123 = '3'
+    Heat3 = '4'
+    OffLastCool = '5'
+    Cool1 = '6'
+    Cool12 = '7'
+    Off = '8'
+    EmgHeat = '9'
+    Dry = '10'
 
   class Event(LutronEvent):
     """Output events that can be generated."""
@@ -747,6 +752,7 @@ class HVAC(LutronEntity):
     self._temp_units = "F" if temp_units==1 else "C"
     self._operating_modes = re.split(r'\s*,\s*', avail_op_modes)
     self._fan_modes = re.split(r'\s*,\s*', avail_fan_modes)
+    self._call_status = None
     self._current_fan = None
     self._current_mode = None
     self._current_temp = None
@@ -767,6 +773,19 @@ class HVAC(LutronEntity):
   def id(self):
     """The integration id"""
     return self._integration_id
+  
+  def __query_call_status(self):
+    """Helper to perform the actual query the current temp level of the
+    thermostat."""
+    self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.CALL_STATUS)
+  
+  @property
+  def call_status(self):
+    """Returns the current status by querying the remote controller."""
+    ev = self._query_waiters.request(self.__query_call_status)
+    ev.wait(1.0)
+    return self._call_status
 
   def handle_update(self, args):
     """Handles an event update for this object, e.g. temp level change."""
@@ -803,6 +822,10 @@ class HVAC(LutronEntity):
 
     def _u_call_status(action, mode):
       """Handles call status"""
+      self._call_status = CALL_STATUS.get_key(mode)
+      self._query_waiters.notify()
+      self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
+      return True
 
     event = int(args[0])
     handler_functions = {
@@ -819,10 +842,6 @@ class HVAC(LutronEntity):
         elif num_args == 2:
             handler(args[1], args[2])
     
-    #level = float(args[1])
-    #self._level = level
-    #self._query_waiters.notify()
-    #self._dispatch_event(HVAC.Event.TEMP_SETPOINT_F, {'level': self._level})
     return True
 
   def __do_query_current_temp(self):
