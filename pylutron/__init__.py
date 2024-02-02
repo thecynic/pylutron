@@ -732,16 +732,16 @@ class HVAC(LutronEntity):
 
   class Event(LutronEvent,EnumWithReverseMapping):
     """Output events that can be generated."""
-    TEMP_CURRENT_F = 1
-    TEMP_SETPOINTS_F = 2
-    OPERATING_MODE = 3
-    FAN_MODE = 4
-    ECO_MODE = 5
-    ECO_OFFSET = 6
-    SYSTEM_MODE = 11
-    CALL_STATUS = 14
-    TEMP_CURRENT_C = 15
-    TEMP_SETPOINTS_C = 16
+    TEMP_CURRENT_F = '1'
+    TEMP_SETPOINTS_F = '2'
+    OPERATING_MODE = '3'
+    FAN_MODE = '4'
+    ECO_MODE = '5'
+    ECO_OFFSET = '6'
+    SYSTEM_MODE = '11'
+    CALL_STATUS = '14'
+    TEMP_CURRENT_C = '15'
+    TEMP_SETPOINTS_C = '16'
 
   def __init__(self, lutron, name, integration_id, uuid, temp_units, avail_op_modes, avail_fan_modes):
     """Initializes the Output."""
