@@ -9,6 +9,7 @@ __copyright__ = "Copyright 2016, Dima Zavin"
 
 from enum import Enum
 import logging
+import re
 import socket
 import telnetlib
 import threading
@@ -744,8 +745,8 @@ class HVAC(LutronEntity):
     self._integration_id = integration_id
     self._lutron.register_id(HVAC._CMD_TYPE, self)
     self._temp_units = "F" if temp_units==1 else "C"
-    self._operating_modes = avail_op_modes.split()
-    self._fan_modes = avail_fan_modes.split()
+    self._operating_modes = re.split(r'\s*,\s*', avail_op_modes)
+    self._fan_modes = re.split(r'\s*,\s*', avail_fan_modes)
     self._current_fan = None
     self._current_mode = None
     self._current_temp = None
@@ -878,7 +879,7 @@ class HVAC(LutronEntity):
         Event.OPERATING_MODE, new_mode)
     self._current_mode = new_mode
 
-    
+
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
   switched/dimmed load, e.g. light fixture, outlet, etc."""
