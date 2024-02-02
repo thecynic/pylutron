@@ -848,7 +848,7 @@ class HVAC(LutronEntity):
     if self._current_temp == new_temp:
       return
     self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
-        Event.TEMP_CURRENT_F, "%.2f" % new_temp)
+        HVAC.Event.TEMP_CURRENT_F, "%.2f" % new_temp)
     self._current_temp = new_temp
 
 
@@ -857,7 +857,7 @@ class HVAC(LutronEntity):
     """Helper to perform the actual query the current temp level of the
     thermostat."""
     self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            Event.OPERATING_MODE)
+            HVAC.Event.OPERATING_MODE)
 
   def last_mode(self):
     """Returns last cached value of the temp level, no query is performed."""
@@ -876,7 +876,7 @@ class HVAC(LutronEntity):
     if self._current_mode == new_mode:
       return
     self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
-        Event.OPERATING_MODE, new_mode)
+        HVAC.Event.OPERATING_MODE, new_mode)
     self._current_mode = new_mode
 
 
