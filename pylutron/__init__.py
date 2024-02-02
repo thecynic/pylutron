@@ -827,8 +827,8 @@ class HVAC(LutronEntity):
       self._query_waiters.notify()
       self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
       return True
-
-    event = getattr(HVAC.Event, args[0]).value
+    _LOGGER.info('################ HAVE IT ASSSS %s', args[0])
+    event = HVAC.Event.get_key(args[0])
     _LOGGER.info('################ HAVE IT A %s', event)
     handler_functions = {
         HVAC.Event.TEMP_CURRENT_F: (_u_current_temp, 1),
