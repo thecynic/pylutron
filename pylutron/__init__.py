@@ -828,7 +828,8 @@ class HVAC(LutronEntity):
       self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
       return True
 
-    event = int(args[0])
+    event = getattr(HVAC.Event, args[0]).value
+    _LOGGER.info('################ HAVE IT A %s', event)
     handler_functions = {
         HVAC.Event.TEMP_CURRENT_F: (_u_current_temp, 1),
         HVAC.Event.TEMP_SETPOINTS_F: (_u_setpoints, 2),
@@ -837,6 +838,7 @@ class HVAC(LutronEntity):
         HVAC.Event.CALL_STATUS: (_u_call_status,1)
     }
     if event in handler_functions:
+        _LOGGER.info('################ HAVE IT %s', event)
         handler, num_args = handler_functions[event]
         if num_args == 1:
             handler(args[1])
