@@ -316,7 +316,7 @@ class LutronXmlDbParser(object):
       'watts': int(output_xml.get('Wattage')),
       'output_type': output_type,
       'integration_id': int(output_xml.get('IntegrationID')),
-      'uuid': output_xml.get('UUID')
+      'uuid': output_xml.get('UUID') or '%s-0' % output_xml.get('IntegrationID')
     }
     if output_type == 'SYSTEM_SHADE':
       return Shade(self._lutron, **kwargs)
@@ -329,7 +329,7 @@ class LutronXmlDbParser(object):
                     keypad_type=keypad_xml.get('DeviceType'),
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')),
-                    uuid=keypad_xml.get('UUID'))
+                    uuid=keypad_xml.get('UUID') or '%s-0' % keypad_xml.get('IntegrationID'))
     components = keypad_xml.find('Components')
     if components is None:
       return keypad
@@ -361,7 +361,7 @@ class LutronXmlDbParser(object):
                     num=int(component_xml.get('ComponentNumber')),
                     button_type=button_type,
                     direction=direction,
-                    uuid=button_xml.get('UUID'))
+                    uuid=button_xml.get('UUID') or '%d-%s' % (keypad.id, component_xml.get('ComponentNumber')))
     return button
 
   def _parse_led(self, keypad, component_xml):
@@ -375,7 +375,7 @@ class LutronXmlDbParser(object):
               name=('LED %d' % led_num),
               led_num=led_num,
               component_num=component_num,
-              uuid=component_xml.find('LED').get('UUID'))
+              uuid=component_xml.find('LED').get('UUID') or '%d-%d' % (keypad.id, component_num))
     return led
 
   def _parse_motion_sensor(self, sensor_xml):
