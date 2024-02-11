@@ -389,7 +389,7 @@ class LutronXmlDbParser(object):
     return MotionSensor(self._lutron,
                         name=sensor_xml.get('Name'),
                         integration_id=int(sensor_xml.get('IntegrationID')),
-                        uuid=sensor_xml.get('UUID'))
+                        uuid=sensor_xml.get('UUID') or sensor_xml.get('IntegrationID'))
 
   def _parse_occupancy_group(self, group_xml):
     """Parses an Occupancy Group object.
@@ -1204,6 +1204,8 @@ class OccupancyGroup(LutronEntity):
   def _bind_area(self, area):
     self._area = area
     self._integration_id = area.id
+    if self._uuid is None:
+      self._uuid = '%s-%s' % (area.id, self._group_number)
     self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
 
   @property
