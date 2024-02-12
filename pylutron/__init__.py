@@ -622,6 +622,11 @@ class LutronEntity(object):
   def uuid(self):
     return self._uuid
 
+  @property
+  def legacy_uuid(self):
+    """Return a synthesized uuid."""
+    return None
+
   def _dispatch_event(self, event: LutronEvent, params: Dict):
     """Dispatches the specified event to all the subscribers."""
     for handler, context in self._subscribers:
@@ -692,6 +697,10 @@ class Output(LutronEntity):
   def id(self):
     """The integration id"""
     return self._integration_id
+
+  @property
+  def legacy_uuid(self):
+    return '%d-0' % self.id
 
   def handle_update(self, args):
     """Handles an event update for this object, e.g. dimmer level change."""
@@ -815,6 +824,10 @@ class KeypadComponent(LutronEntity):
     events. This is different from KeypadComponent.number because this property
     is only used for interfacing with the controller."""
     return self._component_num
+
+  @property
+  def legacy_uuid(self):
+    return '%d-%d' % (self._keypad.id, self._component_num)
 
   def handle_update(self, action, params):
     """Handle the specified action on this component."""
@@ -1019,6 +1032,10 @@ class Keypad(LutronEntity):
     return self._integration_id
 
   @property
+  def legacy_uuid(self):
+    return '%d-0' % self.id
+
+  @property
   def name(self):
     """Returns the name of this keypad"""
     return self._name
@@ -1113,6 +1130,10 @@ class MotionSensor(LutronEntity):
   def id(self):
     """The integration id"""
     return self._integration_id
+
+  @property
+  def legacy_uuid(self):
+    return str(self.id)
 
   def __str__(self):
     """Returns a pretty-printed string for this object."""
@@ -1210,6 +1231,10 @@ class OccupancyGroup(LutronEntity):
   def id(self):
     """The integration id"""
     return self._integration_id
+
+  @property
+  def legacy_uuid(self):
+    return '%s-%s' % (self._area.id, self._group_number)
 
   @property
   def group_number(self):
