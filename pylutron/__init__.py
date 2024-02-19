@@ -216,10 +216,11 @@ class LutronXmlDbParser(object):
   def __init__(self, lutron, xml_db_str):
     """Initializes the XML parser, takes the raw XML data as string input."""
     self._lutron = lutron
-    self._occupancy_groups = {}
+    
     self._xml_db_str = xml_db_str
     self.areas = []
     self.hvacs = []
+    self._occupancy_groups = {}
     self.project_name = None
     
 
@@ -572,7 +573,7 @@ class Lutron(object):
     self._hvacs = parser.hvacs
     self._name = parser.project_name
 
-    _LOGGER.info('Found Lutron projection: %s, %d areas' % (
+    _LOGGER.info('Found Lutron project: %s, %d areas' % (
         self._name, len(self.areas)))
 
     if cache_path and loaded_from == 'repeater':
@@ -1182,10 +1183,6 @@ class KeypadComponent(LutronEntity):
     events. This is different from KeypadComponent.number because this property
     is only used for interfacing with the controller."""
     return self._component_num
-  
-  @property
-  def legacy_uuid(self):
-    return '%d-%d' % (self._keypad.id, self._component_num)
 
   @property
   def legacy_uuid(self):
@@ -1392,10 +1389,6 @@ class Keypad(LutronEntity):
   def id(self):
     """The integration id"""
     return self._integration_id
-  
-  @property
-  def legacy_uuid(self):
-    return '%d-0' % self.id
 
   @property
   def legacy_uuid(self):
@@ -1447,7 +1440,6 @@ class PowerSource(Enum):
   BATTERY = 1
   EXTERNAL = 2
 
-
 class BatteryStatus(Enum):
   """Enum values representing battery state, reported by queries to
   battery-powered devices."""
@@ -1497,10 +1489,6 @@ class MotionSensor(LutronEntity):
     """The integration id"""
     return self._integration_id
   
-  @property
-  def legacy_uuid(self):
-    return str(self.id)
-
   @property
   def legacy_uuid(self):
     return str(self.id)
