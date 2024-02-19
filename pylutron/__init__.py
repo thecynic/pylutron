@@ -222,7 +222,6 @@ class LutronXmlDbParser(object):
     self.hvacs = []
     self._occupancy_groups = {}
     self.project_name = None
-    
 
   def parse(self):
     """Main entrypoint into the parser. It interprets and creates all the
@@ -1121,7 +1120,6 @@ class Output(LutronEntity):
 #    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
 #        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
 
-
   @property
   def watts(self):
     """Returns the configured maximum wattage for this output (not an actual
@@ -1488,7 +1486,7 @@ class MotionSensor(LutronEntity):
   def id(self):
     """The integration id"""
     return self._integration_id
-  
+
   @property
   def legacy_uuid(self):
     return str(self.id)
