@@ -7,6 +7,7 @@ for enumerating and controlling the loads are supported.
 __author__ = "Dima Zavin"
 __copyright__ = "Copyright 2016, Dima Zavin"
 
+from datetime import timedelta
 from enum import Enum
 import logging
 import re
@@ -538,7 +539,7 @@ class Lutron(object):
   def send(self, op, cmd, integration_id, *args):
     """Formats and sends the requested command to the Lutron controller."""
     out_cmd = ",".join(
-        (cmd, str(integration_id)) + tuple((str(x) for x in args)))
+        (cmd, str(integration_id)) + tuple((str(x) for x in args if x is not None)))
     self._conn.send(op + out_cmd)
 
   def load_xml_db(self, cache_path=None):
@@ -1111,6 +1112,10 @@ class KeypadComponent(LutronEntity):
   def legacy_uuid(self):
     return '%d-%d' % (self._keypad.id, self._component_num)
 
+  @property
+  def legacy_uuid(self):
+    return '%d-%d' % (self._keypad.id, self._component_num)
+
   def handle_update(self, action, params):
     """Handle the specified action on this component."""
     _LOGGER.debug('Keypad: "%s" Handling "%s" Action: %s Params: %s"' % (
@@ -1318,6 +1323,10 @@ class Keypad(LutronEntity):
     return '%d-0' % self.id
 
   @property
+  def legacy_uuid(self):
+    return '%d-0' % self.id
+
+  @property
   def name(self):
     """Returns the name of this keypad"""
     return self._name
@@ -1413,6 +1422,10 @@ class MotionSensor(LutronEntity):
     """The integration id"""
     return self._integration_id
   
+  @property
+  def legacy_uuid(self):
+    return str(self.id)
+
   @property
   def legacy_uuid(self):
     return str(self.id)
