@@ -913,14 +913,14 @@ class HVAC(LutronEntity):
     @property
     def setpoint_cool_f(self):
       """Returns the current temp level by querying the remote controller."""
-      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev = self._query_waiters.request(self.__do_query_setpoint_f)
       ev.wait(1.0)
       return self._setpoint_cool_f
     
     @property
     def setpoint_heat_f(self):
       """Returns the current temp level by querying the remote controller."""
-      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev = self._query_waiters.request(self.__do_query_setpoint_f)
       ev.wait(1.0)
       return self.setpoint_heat_f
 
@@ -959,14 +959,14 @@ class HVAC(LutronEntity):
     @property
     def setpoint_cool_c(self):
       """Returns the current temp level by querying the remote controller."""
-      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev = self._query_waiters.request(self.__do_query_setpoint_c)
       ev.wait(1.0)
       return self._setpoint_cool_c
     
     @property
     def setpoint_heat_c(self):
       """Returns the current temp level by querying the remote controller."""
-      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev = self._query_waiters.request(self.__do_query_setpoint_c)
       ev.wait(1.0)
       return self.setpoint_heat_c
 
