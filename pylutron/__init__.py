@@ -810,21 +810,21 @@ class HVAC(LutronEntity):
         """Handles an event update for this object, e.g. temp level change."""
         _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
 
-        def _u_current_temp_f(action, temp):
+        def _u_current_temp_f(temp):
             """Handles current temp interaction"""
             self._current_temp_f = float(temp)
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp})
             return True
         
-        def _u_current_temp_c(action, temp):
+        def _u_current_temp_c(temp):
             """Handles current temp interaction"""
             self._current_temp_c = float(temp)
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp})
             return True
 
-        def _u_setpoints_f(action, heat, cool):
+        def _u_setpoints_f(heat, cool):
             """Handles setpoint interaction"""
             self._setpoint_cool_f = float(cool)
             self._setpoint_heat_f = float(heat)
@@ -832,7 +832,7 @@ class HVAC(LutronEntity):
             self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'setpoints_f': self._setpoint_cool_f})
             return True
         
-        def _u_setpoints_c(action, heat, cool):
+        def _u_setpoints_c(heat, cool):
             """Handles setpoint interaction"""
             self._setpoint_cool_c = float(cool)
             self._setpoint_heat_c = float(heat)
@@ -840,30 +840,30 @@ class HVAC(LutronEntity):
             self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_C, {'setpoints_c': self._setpoint_cool_c})
             return True
 
-        def _u_operating_mode(action, mode):
+        def _u_operating_mode(mode):
             """Handles operating mode interaction"""
             self._current_mode = HVAC.OperatingModes(int(mode))
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
             return True
 
-        def _u_fan_mode(action, mode):
+        def _u_fan_mode(mode):
             """Handles fan mode interaction"""
             self._current_fan = HVAC.FanModes(int(mode))
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
             return True
 
-        def _u_call_status(action, mode):
+        def _u_call_status(mode):
             """Handles call status"""
             self._call_status = HVAC.CallStatus(int(mode))
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
             return True
         
-        def _u_schedule_status(action, mode):
+        def _u_schedule_status(mode):
             """Handles schedule status"""
-            self._call_status = HVAC.CallStatus(int(mode))
+            #self._call_status = HVAC.CallStatus(int(mode))
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
             return True
