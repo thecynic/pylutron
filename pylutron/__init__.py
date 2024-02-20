@@ -991,9 +991,9 @@ class HVAC(LutronEntity):
     def __do_query_current_temp(self):
         """Helper to perform the actual query the current temp level."""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            HVAC.Event.TEMP_CURRENT_F)
+            HVAC.Event.TEMP_CURRENT_F.value)
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            HVAC.Event.TEMP_CURRENT_C)
+            HVAC.Event.TEMP_CURRENT_C.value)
 
     def last_temp_f(self):
         """Returns last cached value of the temp level, no query is performed."""
@@ -1020,7 +1020,7 @@ class HVAC(LutronEntity):
     def __query_call_status(self):
         """Helper to perform the actual query for call status of the thermostat."""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            HVAC.Event.CALL_STATUS)
+            HVAC.Event.CALL_STATUS.value)
 
     @property
     def call_status(self):
@@ -1032,7 +1032,7 @@ class HVAC(LutronEntity):
     def __do_query_current_mode(self):
         """Helper to perform the actual query of the current mode"""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            HVAC.Event.OPERATING_MODE)
+            HVAC.Event.OPERATING_MODE.value)
 
     def last_mode(self):
         """Returns last cached value of the temp level, no query is performed."""
@@ -1060,7 +1060,7 @@ class HVAC(LutronEntity):
     def __do_query_current_fan_mode(self):
         """Helper to perform the actual query of the fan mode"""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-            HVAC.Event.FAN_MODE)
+            HVAC.Event.FAN_MODE.value)
 
     def last_fan_mode(self):
         """Returns last cached fan mode, no query is performed."""
@@ -1091,7 +1091,7 @@ class HVAC(LutronEntity):
     def __do_query_sch_stat(self):
       """Helper to perform the actual query"""
       self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
-              HVAC.Event.SCHEDULE_STATUS)
+              HVAC.Event.SCHEDULE_STATUS.value)
       
     @property
     def schedule_status(self):
