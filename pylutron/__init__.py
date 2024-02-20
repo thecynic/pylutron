@@ -869,7 +869,7 @@ class HVAC(LutronEntity):
             return True
         
         _LOGGER.info('################ HAVE IT ASSSS %s', args[0])
-        event = HVAC.Event.get_key(int(args[0]))
+        event = HVAC.Event(int(args[0]))
         _LOGGER.info('################ HAVE IT A %s', event)
         handler_functions = {
           HVAC.Event.TEMP_CURRENT_F: (_u_current_temp_f, 1),
