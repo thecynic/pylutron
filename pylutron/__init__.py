@@ -857,6 +857,7 @@ class HVAC(LutronEntity):
         def _u_call_status(mode):
             """Handles call status"""
             self._call_status = HVAC.CallStatus(int(mode))
+            _LOGGER.info('################ CALL STAT')
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
             return True
@@ -891,6 +892,7 @@ class HVAC(LutronEntity):
             handler, num_args = handler_functions[event]
             if num_args == 1:
                 handler(args[1])
+                _LOGGER.info('################ ONE %s', args[1])
             elif num_args == 2:
                 handler(args[1], args[2])
 
