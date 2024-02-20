@@ -781,7 +781,7 @@ class HVAC(LutronEntity):
         self._temp_units = "F" if temp_units == 1 else "C"
         self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
         self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
-        self._call_status = None
+        self._call_status = HVAC.CallStatus.OFF.name
         self._schedule_status = HVAC.ScheduleStatus.SCHEDULE_UNAVAILABLE.name
         self._current_fan = HVAC.FanModes.NO_FAN.name
         self._current_mode = HVAC.OperatingModes.OFF.name
