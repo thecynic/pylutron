@@ -896,6 +896,98 @@ class HVAC(LutronEntity):
 
         return True
 
+    def last_setpoint_cool_f(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_cool_f
+
+    def last_setpoint_heat_f(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_heat_f
+    
+    def __do_query_setpoint_f(self):
+      """Helper to perform the actual query the current temp level of the
+      thermostat. For pure on/off loads the result is either 0.0 or 100.0."""
+      self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+              str(HVAC.Event.TEMP_SETPOINTS_F.value))
+
+    @property
+    def setpoint_cool_f(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev.wait(1.0)
+      return self._setpoint_cool_f
+    
+    @property
+    def setpoint_heat_f(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev.wait(1.0)
+      return self.setpoint_heat_f
+
+    @setpoint_cool.setter
+    def setpoint_cool_f(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_cool_f == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_F.value), str(self._setpoint_heat_f), str(new_setpoint))
+      self._setpoint_cool_f = new_setpoint
+  
+    @setpoint_heat.setter
+    def setpoint_heat_f(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_heat_f == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_F.value), str(new_setpoint), str(self._setpoint_cool_f))
+      self._setpoint_heat_f = new_setpoint
+
+    def last_setpoint_cool_c(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_cool_c
+    
+    def last_setpoint_heat_c(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_heat_c
+    
+    def __do_query_setpoint_c(self):
+      """Helper to perform the actual query the current temp level of the
+      thermostat. For pure on/off loads the result is either 0.0 or 100.0."""
+      self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+              str(HVAC.Event.TEMP_SETPOINTS_C.value))
+
+    @property
+    def setpoint_cool_c(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev.wait(1.0)
+      return self._setpoint_cool_c
+    
+    @property
+    def setpoint_heat_c(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint)
+      ev.wait(1.0)
+      return self.setpoint_heat_c
+
+    @setpoint_cool.setter
+    def setpoint_cool_c(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_cool_c == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_C.value), str(self._setpoint_heat_c), str(new_setpoint))
+      self._setpoint_cool_c = new_setpoint
+  
+    @setpoint_heat.setter
+    def setpoint_heat_c(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_heat_c == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_C.value), str(new_setpoint), str(self._setpoint_cool_c))
+      self._setpoint_heat_c = new_setpoint
+
     def __do_query_current_temp(self):
         """Helper to perform the actual query the current temp level."""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
