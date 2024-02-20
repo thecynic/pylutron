@@ -1023,6 +1023,10 @@ class HVAC(LutronEntity):
         """Helper to perform the actual query for call status of the thermostat."""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
             HVAC.Event.CALL_STATUS.value)
+    
+    def last_status(self):
+        """Returns last cached value of status, no query is performed."""
+        return self._call_status
 
     @property
     def call_status(self):
