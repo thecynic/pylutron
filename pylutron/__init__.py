@@ -778,8 +778,8 @@ class HVAC(LutronEntity):
         self._integration_id = integration_id
         self._lutron.register_id(HVAC._CMD_TYPE, self)
         self._temp_units = "F" if temp_units == 1 else "C"
-        self._operating_modes = re.split(r"\s*,\s*", avail_op_modes)
-        self._fan_modes = re.split(r"\s*,\s*", avail_fan_modes)
+        self._operating_modes = re.split(r"\s*,\s*", avail_op_modes.upper())
+        self._fan_modes = re.split(r"\s*,\s*", avail_fan_modes.upper())
         self._call_status = None
         self._schedule_status = None
         self._current_fan = None
