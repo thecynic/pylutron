@@ -782,15 +782,15 @@ class HVAC(LutronEntity):
         self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
         self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
         self._call_status = None
-        self._schedule_status = None
-        self._current_fan = None
-        self._current_mode = None
-        self._current_temp_c = None
-        self._current_temp_f = None
-        self._setpoint_cool_c = None
-        self._setpoint_heat_c = None
-        self._setpoint_cool_f = None
-        self._setpoint_heat_f = None
+        self._schedule_status = HVAC.ScheduleStatus.SCHEDULE_UNAVAILABLE.name
+        self._current_fan = HVAC.FanModes.NO_FAN.name
+        self._current_mode = HVAC.OperatingModes.OFF.name
+        self._current_temp_c = 0.0
+        self._current_temp_f = 0
+        self._setpoint_cool_c = 0.0
+        self._setpoint_heat_c = 0.0
+        self._setpoint_cool_f = 0
+        self._setpoint_heat_f = 0
         _LOGGER.info("################ DONE INIT HVAC %s", vars(self))
 
     def __str__(self):
