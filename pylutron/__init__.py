@@ -1051,6 +1051,7 @@ class HVAC(LutronEntity):
     def current_mode(self, new_mode):
         """Sets the new operating mode."""
         #mode = HVAC.OperatingModes[new_mode]
+        _LOGGER.info('################ HVAC %s as %s', new_mode, self._current_mode)
         if self._current_mode == new_mode:
             return
         mode = HVAC.OperatingModes[new_mode].value
