@@ -924,7 +924,7 @@ class HVAC(LutronEntity):
       ev.wait(1.0)
       return self.setpoint_heat_f
 
-    @setpoint_cool.setter
+    @setpoint_cool.setter_f
     def setpoint_cool_f(self, new_setpoint):
       """Sets the new temp level."""
       if self._setpoint_cool_f == new_setpoint:
@@ -933,7 +933,7 @@ class HVAC(LutronEntity):
           str(HVAC.Event.TEMP_SETPOINTS_F.value), str(self._setpoint_heat_f), str(new_setpoint))
       self._setpoint_cool_f = new_setpoint
   
-    @setpoint_heat.setter
+    @setpoint_heat.setter_f
     def setpoint_heat_f(self, new_setpoint):
       """Sets the new temp level."""
       if self._setpoint_heat_f == new_setpoint:
@@ -970,7 +970,7 @@ class HVAC(LutronEntity):
       ev.wait(1.0)
       return self.setpoint_heat_c
 
-    @setpoint_cool.setter
+    @setpoint_cool.setter_c
     def setpoint_cool_c(self, new_setpoint):
       """Sets the new temp level."""
       if self._setpoint_cool_c == new_setpoint:
@@ -979,7 +979,7 @@ class HVAC(LutronEntity):
           str(HVAC.Event.TEMP_SETPOINTS_C.value), str(self._setpoint_heat_c), str(new_setpoint))
       self._setpoint_cool_c = new_setpoint
   
-    @setpoint_heat.setter
+    @setpoint_heat.setter_c
     def setpoint_heat_c(self, new_setpoint):
       """Sets the new temp level."""
       if self._setpoint_heat_c == new_setpoint:
