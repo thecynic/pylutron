@@ -893,7 +893,7 @@ class HVAC(LutronEntity):
           HVAC.Event.FAN_MODE: (_u_fan_mode, 1),
           HVAC.Event.CALL_STATUS: (_u_call_status,1),
           HVAC.Event.TEMP_CURRENT_C: (_u_current_temp_c, 1),
-          HVAC.Event.TEMP_SETPOINTS_C: (_u_setpoints_c, 1),
+          HVAC.Event.TEMP_SETPOINTS_C: (_u_setpoints_c, 2),
           HVAC.Event.SCHEDULE_STATUS: (_u_schedule_status, 1),
         }
         if event in handler_functions:
