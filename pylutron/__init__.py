@@ -815,7 +815,7 @@ class HVAC(LutronEntity):
             if self._current_temp_f != float(temp):
               self._current_temp_f = float(temp)
             self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp})
+            self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp_f})
             return True
         
         def _u_current_temp_c(temp):
@@ -823,7 +823,7 @@ class HVAC(LutronEntity):
             if self._current_temp_c != float(temp):
               self._current_temp_c = float(temp)
             self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp})
+            self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp_f})
             return True
 
         def _u_setpoints_f(heat, cool):
