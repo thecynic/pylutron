@@ -842,7 +842,7 @@ class HVAC(LutronEntity):
 
         def _u_operating_mode(mode):
             """Handles operating mode interaction"""
-            self._current_mode = HVAC.OperatingModes(int(mode))
+            self._current_mode = HVAC.OperatingModes(int(mode)).name
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
             return True
