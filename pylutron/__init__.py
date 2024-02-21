@@ -812,30 +812,36 @@ class HVAC(LutronEntity):
 
         def _u_current_temp_f(temp):
             """Handles current temp interaction"""
-            self._current_temp_f = float(temp)
+            if self._current_temp_f != float(temp):
+              self._current_temp_f = float(temp)
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp})
             return True
         
         def _u_current_temp_c(temp):
             """Handles current temp interaction"""
-            self._current_temp_c = float(temp)
+            if self._current_temp_c != float(temp):
+              self._current_temp_c = float(temp)
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp})
             return True
 
         def _u_setpoints_f(heat, cool):
             """Handles setpoint interaction"""
-            self._setpoint_cool_f = float(cool)
-            self._setpoint_heat_f = float(heat)
+            if self._setpoint_cool_f != float(cool):
+              self._setpoint_cool_f = float(cool)
+            if self._setpoint_heat_f != float(heat):
+              self._setpoint_heat_f = float(heat)
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'setpoints_f': self._setpoint_cool_f})
             return True
         
         def _u_setpoints_c(heat, cool):
             """Handles setpoint interaction"""
-            self._setpoint_cool_c = float(cool)
-            self._setpoint_heat_c = float(heat)
+            if self._setpoint_cool_c != float(cool):
+              self._setpoint_cool_c = float(cool)
+            if self._setpoint_heat_c != float(heat):
+              self._setpoint_heat_c = float(heat)
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_C, {'setpoints_c': self._setpoint_cool_c})
             return True
@@ -850,22 +856,24 @@ class HVAC(LutronEntity):
 
         def _u_fan_mode(mode):
             """Handles fan mode interaction"""
-            self._current_fan = HVAC.FanModes(int(mode)).name
+            if self._current_fan != HVAC.FanModes(int(mode)).name:
+              self._current_fan = HVAC.FanModes(int(mode)).name
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
             return True
 
         def _u_call_status(mode):
             """Handles call status"""
-            self._call_status = HVAC.CallStatus(int(mode)).name
-            _LOGGER.info('################ CALL STAT')
+            if self._call_status != HVAC.CallStatus(int(mode)).name:
+              self._call_status = HVAC.CallStatus(int(mode)).name
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
             return True
         
         def _u_schedule_status(mode):
             """Handles schedule status"""
-            #self._call_status = HVAC.CallStatus(int(mode))
+            if self._call_status != HVAC.CallStatus(int(mode)).name:
+              self._call_status = HVAC.CallStatus(int(mode)).name
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
             return True
