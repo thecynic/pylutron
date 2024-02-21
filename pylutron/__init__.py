@@ -288,6 +288,10 @@ class LutronXmlDbParser(object):
       'temp_units': int(hvac_xml.get('TemperatureUnits')),
       'avail_op_modes': hvac_xml.get('AvailableOperatingModes'),
       'avail_fan_modes': hvac_xml.get('AvailableFanModes'),
+      'min_temp_cool': hvac_xml.get('MinCoolSet'),
+      'max_temp_cool': hvac_xml.get('MaxCoolSet'),
+      'min_temp_heat': hvac_xml.get('MinHeatSet'),
+      'max_temp_heat': hvac_xml.get('MaxHeatSet'),
     }
     return HVAC(self._lutron, **kwargs)
 
@@ -772,6 +776,10 @@ class HVAC(LutronEntity):
         temp_units,
         avail_op_modes,
         avail_fan_modes,
+        min_temp_cool,
+        max_temp_cool,
+        min_temp_heat,
+        max_temp_heat,
     ):
         """Initializes the HVAC controller."""
         super(HVAC, self).__init__(lutron, name, uuid)
@@ -781,6 +789,10 @@ class HVAC(LutronEntity):
         self._temp_units = "F" if temp_units == 1 else "C"
         self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
         self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
+        self._min_temp_cool = min_temp_cool
+        self._max_temp_cool = max_temp_cool
+        self._min_temp_heat = min_temp_heat
+        self._max_temp_heat = max_temp_heat
         self._call_status = HVAC.CallStatus.OFF.name
         self._schedule_status = HVAC.ScheduleStatus.SCHEDULE_UNAVAILABLE.name
         self._current_fan = HVAC.FanModes.NO_FAN.name
