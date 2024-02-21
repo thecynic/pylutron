@@ -842,14 +842,15 @@ class HVAC(LutronEntity):
 
         def _u_operating_mode(mode):
             """Handles operating mode interaction"""
-            self._current_mode = HVAC.OperatingModes(int(mode)).name
+            if self._current_mode != HVAC.OperatingModes(int(mode)).name:
+              self._current_mode = HVAC.OperatingModes(int(mode)).name
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
             return True
 
         def _u_fan_mode(mode):
             """Handles fan mode interaction"""
-            self._current_fan = HVAC.FanModes(int(mode))
+            self._current_fan = HVAC.FanModes(int(mode)).name
             self._query_waiters.notify()
             self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
             return True
@@ -874,7 +875,7 @@ class HVAC(LutronEntity):
           event = HVAC.Event(int(args[0]))
         except ValueError:
           _LOGGER.info('################ HVAC Action Number %s not implemented', args[0])
-          return True  
+          return False  
 
         _LOGGER.info('################ HAVE IT A %s', event)
         handler_functions = {
