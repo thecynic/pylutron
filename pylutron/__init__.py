@@ -868,6 +868,7 @@ class HVAC(LutronEntity):
 
         def _u_fan_mode(mode):
             """Handles fan mode interaction"""
+            _LOGGER.info('################ UPDATING HVAC FAN MODE %s as %s', self._current_fan,HVAC.FanModes(int(mode)).name)
             if self._current_fan != HVAC.FanModes(int(mode)).name:
               self._current_fan = HVAC.FanModes(int(mode)).name
             self._query_waiters.notify()
@@ -1099,6 +1100,7 @@ class HVAC(LutronEntity):
         """Returns the current fan mode by querying the remote controller."""
         ev = self._query_waiters.request(self.__do_query_current_fan_mode)
         ev.wait(1.0)
+        _LOGGER.info('################ RETURNING HVAC FAN MODE %s ', self._current_fan)
         return self._current_fan
 
     @current_mode.setter
