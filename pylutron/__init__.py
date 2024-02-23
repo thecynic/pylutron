@@ -1086,7 +1086,7 @@ class HVAC(LutronEntity):
         str(HVAC.Event.OPERATING_MODE.value), mode)
         self._current_mode = new_mode
 
-    def __do_query_current_fan_mode(self):
+    def __do_query_current_fan(self):
         """Helper to perform the actual query of the fan mode"""
         self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
             HVAC.Event.FAN_MODE.value)
@@ -1096,16 +1096,16 @@ class HVAC(LutronEntity):
         return self._current_fan
 
     @property
-    def current_fan_mode(self):
+    def current_fan(self):
         """Returns the current fan mode by querying the remote controller."""
         _LOGGER.info('################ 1RETURNING HVAC FAN MODE %s ', self._current_fan)
-        ev = self._query_waiters.request(self.__do_query_current_fan_mode)
+        ev = self._query_waiters.request(self.__do_query_current_fan)
         ev.wait(1.0)
         _LOGGER.info('################ 2RETURNING HVAC FAN MODE %s ', self._current_fan)
         return self._current_fan
 
-    @current_mode.setter
-    def current_fan_mode(self, new_mode):
+    @current_fan.setter
+    def current_fan(self, new_mode):
         """Sets the new fan mode."""
         if self._current_fan == new_mode:
             return
