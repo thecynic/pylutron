@@ -821,6 +821,11 @@ class HVAC(LutronEntity):
         """The integration id"""
         return self._integration_id
 
+    @property
+    def avail_misc_features(self):
+        """The available miscellaneous features"""
+        return self._avail_misc_features
+
     def handle_update(self, args):
         """Handles an event update for this object, e.g. temp level change."""
         _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
