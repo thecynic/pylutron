@@ -1098,9 +1098,10 @@ class HVAC(LutronEntity):
     @property
     def current_fan_mode(self):
         """Returns the current fan mode by querying the remote controller."""
+        _LOGGER.info('################ 1RETURNING HVAC FAN MODE %s ', self._current_fan)
         ev = self._query_waiters.request(self.__do_query_current_fan_mode)
         ev.wait(1.0)
-        _LOGGER.info('################ RETURNING HVAC FAN MODE %s ', self._current_fan)
+        _LOGGER.info('################ 2RETURNING HVAC FAN MODE %s ', self._current_fan)
         return self._current_fan
 
     @current_mode.setter
