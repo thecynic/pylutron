@@ -885,10 +885,10 @@ class HVAC(LutronEntity):
         
         def _u_schedule_status(mode):
             """Handles schedule status"""
-            if self._call_status != HVAC.CallStatus(int(mode)).name:
-              self._call_status = HVAC.CallStatus(int(mode)).name
+            if self._schedule_status != HVAC.ScheduleStatus(int(mode)).name:
+              self._schedule_status = HVAC.ScheduleStatus(int(mode)).name
             self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
+            self._dispatch_event(HVAC.Event.SCHEDULE_STATUS, {'schedule_status': self._schedule_status})
             return True
         
         _LOGGER.info('################ HAVE IT ASSSS %s', args[0])
