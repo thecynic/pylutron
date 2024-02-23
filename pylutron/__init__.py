@@ -288,6 +288,7 @@ class LutronXmlDbParser(object):
       'temp_units': int(hvac_xml.get('TemperatureUnits')),
       'avail_op_modes': hvac_xml.get('AvailableOperatingModes'),
       'avail_fan_modes': hvac_xml.get('AvailableFanModes'),
+      'avail_misc_features': hvac_xml.get('AvailableMiscFeatures'),
       'min_temp_cool': hvac_xml.get('MinCoolSet'),
       'max_temp_cool': hvac_xml.get('MaxCoolSet'),
       'min_temp_heat': hvac_xml.get('MinHeatSet'),
@@ -493,7 +494,7 @@ class Lutron(object):
     if not isinstance(obj, LutronEntity):
       raise InvalidSubscription("Subscription target not a LutronEntity")
     _LOGGER.warning("DEPRECATED: Subscribing via Lutron.subscribe is obsolete. "
-                    "Please use LutronEntity.subscribe")
+                    "Please use LutronEntity.ccccccccc")
     if obj not in self._legacy_subscribers:
       self._legacy_subscribers[obj] = handler
       obj.subscribe(self._dispatch_legacy_subscriber, None)
@@ -776,6 +777,7 @@ class HVAC(LutronEntity):
         temp_units,
         avail_op_modes,
         avail_fan_modes,
+        avail_misc_features,
         min_temp_cool,
         max_temp_cool,
         min_temp_heat,
@@ -789,6 +791,7 @@ class HVAC(LutronEntity):
         self._temp_units = "F" if temp_units == 1 else "C"
         self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
         self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
+        self._avail_misc_features = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_misc_features)]
         self._min_temp_cool = min_temp_cool
         self._max_temp_cool = max_temp_cool
         self._min_temp_heat = min_temp_heat
