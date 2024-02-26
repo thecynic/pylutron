@@ -10,11 +10,13 @@ __copyright__ = "Copyright 2016, Dima Zavin"
 from datetime import timedelta
 from enum import Enum
 import logging
+import re
 import socket
 import telnetlib
 import threading
 import time
 
+from slugify import slugify
 from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
@@ -140,6 +142,7 @@ class LutronConnection(threading.Thread):
     self._send_locked("#MONITORING,5,1")
     self._send_locked("#MONITORING,6,1")
     self._send_locked("#MONITORING,8,1")
+    self._send_locked("#MONITORING,17,1")
 
   def _disconnect_locked(self):
     """Closes the current connection. Assume self._lock is held."""
@@ -216,6 +219,7 @@ class LutronXmlDbParser(object):
     self._lutron = lutron
     self._xml_db_str = xml_db_str
     self.areas = []
+    self.hvacs = []
     self._occupancy_groups = {}
     self.project_name = None
 
@@ -260,7 +264,35 @@ class LutronXmlDbParser(object):
     for area_xml in areas.iter('Area'):
       area = self._parse_area(area_xml)
       self.areas.append(area)
+
+    # HVAC controllers are in their own parent node so we need to parse these in their own loop
+    # in this version we only get the core values and ignore any schedules.
+    # schedules could be added in a later version
+    hvac_area = root.find('HVACs')
+    for hvac_xml in hvac_area.iter('HVAC'):
+      hvac = self._parse_hvac(hvac_xml)
+      _LOGGER.debug('HVAC Values: %s', vars(hvac))
+      self.hvacs.append(hvac)
+
     return True
+  
+  def _parse_hvac(self, hvac_xml):
+    """Parses an HVAC, which is generally a thermostat controlling a heating ventilation and cooling unit"""
+    kwargs = {
+      'name': hvac_xml.get('Name'),
+      'integration_id': int(hvac_xml.get('IntegrationID')),
+      'uuid': hvac_xml.get('UUID'),
+      'temp_units': int(hvac_xml.get('TemperatureUnits')),
+      'avail_op_modes': hvac_xml.get('AvailableOperatingModes'),
+      'avail_fan_modes': hvac_xml.get('AvailableFanModes'),
+      'avail_misc_features': hvac_xml.get('AvailableMiscFeatures'),
+      'min_temp_cool': hvac_xml.get('MinCoolSet'),
+      'max_temp_cool': hvac_xml.get('MaxCoolSet'),
+      'min_temp_heat': hvac_xml.get('MinHeatSet'),
+      'max_temp_heat': hvac_xml.get('MaxHeatSet'),
+      'heat_cool_delta': hvac_xml.get('HeatCoolDelta'),
+    }
+    return HVAC(self._lutron, **kwargs)
 
   def _parse_area(self, area_xml):
     """Parses an Area tag, which is effectively a room, depending on how the
@@ -425,12 +457,18 @@ class Lutron(object):
     self._ids = {}
     self._legacy_subscribers = {}
     self._areas = []
+    self._hvacs = []
     self._guid = None
 
   @property
   def areas(self):
     """Return the areas that were discovered for this Lutron controller."""
     return self._areas
+  
+  @property
+  def hvacs(self):
+    """Return the hvacs that were discovered for this Lutron controller."""
+    return self._hvacs
 
   def set_guid(self, guid):
     self._guid = guid
@@ -535,6 +573,7 @@ class Lutron(object):
     parser = LutronXmlDbParser(lutron=self, xml_db_str=xml_db)
     assert(parser.parse())     # throw our own exception
     self._areas = parser.areas
+    self._hvacs = parser.hvacs
     self._name = parser.project_name
 
     _LOGGER.info('Found Lutron project: %s, %d areas' % (
@@ -636,7 +675,7 @@ class LutronEntity(object):
     """Subscribes to events from this entity.
 
     handler: A callable object that takes the following arguments (in order)
-             obj: the LutrongEntity object that generated the event
+             obj: the LutronEntity object that generated the event
              context: user-supplied (to subscribe()) context object
              event: the LutronEvent that was generated.
              params: a dict of event-specific parameters
@@ -655,6 +694,496 @@ class LutronEntity(object):
     """
     return False
 
+class HVAC(LutronEntity):
+    """This is the HVAC entity in Lutron universe. This generally refers to a
+  thermostat"""
+    _CMD_TYPE = "HVAC"
+
+    class FanModes(Enum):
+        """Possible fan modes"""
+        AUTO = 1
+        ON = 2
+        CYCLER = 3
+        NO_FAN = 4
+        HIGH = 5
+        MEDIUM = 6
+        LOW = 7
+        TOP = 8
+
+    class OperatingModes(Enum):
+        """Possible operating modes"""
+        OFF = 1
+        HEAT = 2
+        COOL = 3
+        AUTO = 4
+        EMERGENCY_HEAT = 5
+        LOCKED = 6
+        FAN = 7
+        DRY = 8
+
+    class CallStatus(Enum):
+        """Possible status"""
+        OFFLASTHEAT = 0
+        HEATS1 = 1
+        HEATS1S2 = 2
+        HEATS1S2S3 = 3
+        HEATS3 = 4
+        OFFLASTCOOL = 5
+        COOLS1 = 6
+        COOLS1S2 = 7
+        OFF = 8
+        EMGHEAT = 9
+        DRY = 10
+
+    class ScheduleStatus(Enum):
+        """Possible status"""
+        SCHEDULE_UNAVAILABLE = 0
+        FOLLOWING_SCHEDULE = 1
+        PERMANENT_HOLD = 2
+        TEMPORARY_HOLD = 3
+
+    class Event(LutronEvent):
+        """Output events that can be generated."""
+        TEMP_CURRENT_F = 1
+        TEMP_SETPOINTS_F = 2
+        OPERATING_MODE = 3
+        FAN_MODE = 4
+        ECO_MODE = 5
+        ECO_OFFSET = 6
+        SCHEDULE_STATUS = 7
+        SYSTEM_MODE = 11
+        CALL_STATUS = 14
+        TEMP_CURRENT_C = 15
+        TEMP_SETPOINTS_C = 16
+
+    def __init__(
+        self,
+        lutron,
+        name,
+        integration_id,
+        uuid,
+        temp_units,
+        avail_op_modes,
+        avail_fan_modes,
+        avail_misc_features,
+        min_temp_cool,
+        max_temp_cool,
+        min_temp_heat,
+        max_temp_heat,
+        heat_cool_delta,
+    ):
+        """Initializes the HVAC controller."""
+        super(HVAC, self).__init__(lutron, name, uuid)
+        self._query_waiters = _RequestHelper()
+        self._integration_id = integration_id
+        self._lutron.register_id(HVAC._CMD_TYPE, self)
+        self._temp_units = "F" if temp_units == 1 else "C"
+        self._heat_cool_delta = heat_cool_delta if heat_cool_delta else 3
+        self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
+        self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
+        self._avail_misc_features = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_misc_features)]
+        self._eco_mode = False
+        self._min_temp_cool = min_temp_cool
+        self._max_temp_cool = max_temp_cool
+        self._min_temp_heat = min_temp_heat
+        self._max_temp_heat = max_temp_heat
+        self._call_status = HVAC.CallStatus.OFF.name
+        self._schedule_status = HVAC.ScheduleStatus.SCHEDULE_UNAVAILABLE.name
+        self._current_fan = HVAC.FanModes.NO_FAN.name
+        self._current_mode = HVAC.OperatingModes.OFF.name
+        self._current_temp_c = 0.0
+        self._current_temp_f = 0
+        self._setpoint_cool_c = 0.0
+        self._setpoint_heat_c = 0.0
+        self._setpoint_cool_f = 0
+        self._setpoint_heat_f = 0
+
+    def __str__(self):
+        """Returns a pretty-printed string for this object."""
+        return 'HVAC name: "%s" id: %d' % (self._name, self._integration_id)
+
+    def __repr__(self):
+        """Returns a stringified representation of this object."""
+        return str({'name': self._name, 'id': self._integration_id})
+
+    @property
+    def id(self):
+        """The integration id"""
+        return self._integration_id
+
+    @property
+    def avail_misc_features(self):
+        """The available miscellaneous features"""
+        return self._avail_misc_features
+    
+    @property
+    def heat_cool_delta(self):
+        """The required delta between heat and cool setpoints"""
+        return self._heat_cool_delta
+
+    def handle_update(self, args):
+        """Handles an event update for this object, e.g. temp level change."""
+        _LOGGER.debug("HVAC handle_update %d -- %s" % (self._integration_id, args))
+
+        def _u_current_temp_f(temp):
+            """Handles current temp interaction"""
+            if self._current_temp_f != float(temp):
+              self._current_temp_f = float(temp)
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp_f})
+              return True
+            return False
+        
+        def _u_current_temp_c(temp):
+            """Handles current temp interaction"""
+            if self._current_temp_c != float(temp):
+              self._current_temp_c = float(temp)
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp_f})
+              return True
+            return False
+
+        def _u_setpoints_f(heat, cool):
+            """Handles setpoint interaction"""
+            notify = False
+            if self._setpoint_cool_f != float(cool):
+              self._setpoint_cool_f = float(cool)
+              notify = True
+            if self._setpoint_heat_f != float(heat):
+              self._setpoint_heat_f = float(heat)
+              notify = True
+            if notify:
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'setpoints_f': self._setpoint_cool_f})
+              return True
+            return False
+        
+        def _u_setpoints_c(heat, cool):
+            """Handles setpoint interaction"""
+            notify = False
+            if self._setpoint_cool_c != float(cool):
+              self._setpoint_cool_c = float(cool)
+              notify = True
+            if self._setpoint_heat_c != float(heat):
+              self._setpoint_heat_c = float(heat)
+              notify = True
+            if notify:
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_C, {'setpoints_c': self._setpoint_cool_c})
+              return True
+            return False
+
+        def _u_operating_mode(mode):
+            """Handles operating mode interaction"""
+            if self._current_mode != HVAC.OperatingModes(int(mode)).name:
+              self._current_mode = HVAC.OperatingModes(int(mode)).name
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
+              return True
+            return False
+
+        def _u_fan_mode(mode):
+            """Handles fan mode interaction"""
+            if self._current_fan != HVAC.FanModes(int(mode)).name:
+              self._current_fan = HVAC.FanModes(int(mode)).name
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
+              return True
+            return False
+
+        def _u_call_status(mode):
+            """Handles call status"""
+            if self._call_status != HVAC.CallStatus(int(mode)).name:
+              self._call_status = HVAC.CallStatus(int(mode)).name
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
+              return True
+            return False
+        
+        def _u_schedule_status(mode):
+            """Handles schedule status"""
+            if self._schedule_status != HVAC.ScheduleStatus(int(mode)).name:
+              self._schedule_status = HVAC.ScheduleStatus(int(mode)).name
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.SCHEDULE_STATUS, {'schedule_status': self._schedule_status})
+              return True
+            return False
+
+        def _u_eco_mode(mode):
+            """Handles eco mode status"""
+            mode = int(mode)-1
+            if self._eco_mode != bool(mode):
+              self._eco_mode = bool(mode)
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.ECO_MODE, {'eco_mode': self._eco_mode})
+              return True
+            return False
+
+        try:
+          event = HVAC.Event(int(args[0]))
+        except ValueError:
+          _LOGGER.warning('Lutron HVAC Action Number %s is not implemented', args[0])
+          return False  
+
+        handler_functions = {
+          HVAC.Event.TEMP_CURRENT_F: (_u_current_temp_f, 1),
+          HVAC.Event.TEMP_SETPOINTS_F: (_u_setpoints_f, 2),
+          HVAC.Event.OPERATING_MODE: (_u_operating_mode, 1),
+          HVAC.Event.FAN_MODE: (_u_fan_mode, 1),
+          HVAC.Event.CALL_STATUS: (_u_call_status,1),
+          HVAC.Event.TEMP_CURRENT_C: (_u_current_temp_c, 1),
+          HVAC.Event.TEMP_SETPOINTS_C: (_u_setpoints_c, 2),
+          HVAC.Event.SCHEDULE_STATUS: (_u_schedule_status, 1),
+          HVAC.Event.ECO_MODE: (_u_eco_mode, 1),
+        }
+        if event in handler_functions:
+            handler, num_args = handler_functions[event]
+            if num_args == 1:
+                handler(args[1])
+            elif num_args == 2:
+                handler(args[1], args[2])
+
+        return True
+
+    def last_setpoint_cool_f(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_cool_f
+
+    def last_setpoint_heat_f(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_heat_f
+    
+    def __do_query_setpoint_f(self):
+      """Helper to perform the actual query the current temp level of the
+      thermostat."""
+      self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+              str(HVAC.Event.TEMP_SETPOINTS_F.value))
+
+    @property
+    def setpoint_cool_f(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint_f)
+      ev.wait(1.0)
+      return self._setpoint_cool_f
+    
+    @property
+    def setpoint_heat_f(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint_f)
+      ev.wait(1.0)
+      return self.setpoint_heat_f
+
+    @setpoint_cool_f.setter
+    def setpoint_cool_f(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_cool_f == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_F.value), str(self._setpoint_heat_f), str(new_setpoint))
+      self._setpoint_cool_f = new_setpoint
+  
+    @setpoint_heat_f.setter
+    def setpoint_heat_f(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_heat_f == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_F.value), str(new_setpoint), str(self._setpoint_cool_f))
+      self._setpoint_heat_f = new_setpoint
+
+    def last_setpoint_cool_c(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_cool_c
+    
+    def last_setpoint_heat_c(self):
+      """Returns last cached value of the temp level, no query is performed."""
+      return self._setpoint_heat_c
+    
+    def __do_query_setpoint_c(self):
+      """Helper to perform the actual query the current temp level of the
+      thermostat. For pure on/off loads the result is either 0.0 or 100.0."""
+      self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+              str(HVAC.Event.TEMP_SETPOINTS_C.value))
+
+    @property
+    def setpoint_cool_c(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint_c)
+      ev.wait(1.0)
+      return self._setpoint_cool_c
+    
+    @property
+    def setpoint_heat_c(self):
+      """Returns the current temp level by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_setpoint_c)
+      ev.wait(1.0)
+      return self.setpoint_heat_c
+
+    @setpoint_cool_c.setter
+    def setpoint_cool_c(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_cool_c == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_C.value), str(self._setpoint_heat_c), str(new_setpoint))
+      self._setpoint_cool_c = new_setpoint
+  
+    @setpoint_heat_c.setter
+    def setpoint_heat_c(self, new_setpoint):
+      """Sets the new temp level."""
+      if self._setpoint_heat_c == new_setpoint:
+        return
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          str(HVAC.Event.TEMP_SETPOINTS_C.value), str(new_setpoint), str(self._setpoint_cool_c))
+      self._setpoint_heat_c = new_setpoint
+
+    def __do_query_current_temp(self):
+        """Helper to perform the actual query the current temp level."""
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.TEMP_CURRENT_F.value)
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.TEMP_CURRENT_C.value)
+
+    def last_temp_f(self):
+        """Returns last cached value of the temp level, no query is performed."""
+        return self._current_temp_f
+    
+    def last_temp_c(self):
+        """Returns last cached value of the temp level, no query is performed."""
+        return self._current_temp_c
+
+    @property
+    def current_temp_f(self):
+        """Returns the current temp level by querying the repeater."""
+        ev = self._query_waiters.request(self.__do_query_current_temp)
+        ev.wait(1.0)
+        return self._current_temp_f
+    
+    @property
+    def current_temp_c(self):
+        """Returns the current temp level by querying the repeater."""
+        ev = self._query_waiters.request(self.__do_query_current_temp)
+        ev.wait(1.0)
+        return self._current_temp_c
+
+    def __query_call_status(self):
+        """Helper to perform the actual query for call status of the thermostat."""
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.CALL_STATUS.value)
+    
+    def last_status(self):
+        """Returns last cached value of status, no query is performed."""
+        return self._call_status
+
+    @property
+    def call_status(self):
+        """Returns the current status by querying the remote controller."""
+        ev = self._query_waiters.request(self.__query_call_status)
+        ev.wait(1.0)
+        return self._call_status
+
+    def __do_query_current_mode(self):
+        """Helper to perform the actual query of the current mode"""
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.OPERATING_MODE.value)
+
+    def last_mode(self):
+        """Returns last cached value of the operating mode, no query is performed."""
+        return self._current_mode
+
+    @property
+    def current_mode(self):
+        """Returns the operating mode by querying the remote controller."""
+        ev = self._query_waiters.request(self.__do_query_current_mode)
+        ev.wait(1.0)
+        return self._current_mode
+
+    @current_mode.setter
+    def current_mode(self, new_mode):
+        """Sets the new operating mode."""
+        if self._current_mode == new_mode:
+            return
+        mode = HVAC.OperatingModes[new_mode].value
+        self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+        str(HVAC.Event.OPERATING_MODE.value), mode)
+        self._current_mode = new_mode
+
+    def __do_query_current_eco_mode(self):
+        """Helper to perform the actual query of the current eco mode"""
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.ECO_MODE.value)
+
+    def last_eco_mode(self):
+        """Returns last cached value of the eco mode, no query is performed."""
+        return self._eco_mode
+
+    @property
+    def eco_mode(self):
+        """Returns the eco mode by querying the remote controller."""
+        ev = self._query_waiters.request(self.__do_query_current_eco_mode)
+        ev.wait(1.0)
+        return self._eco_mode
+
+    @eco_mode.setter
+    def eco_mode(self, new_mode):
+        """Sets the new eco mode."""
+        if self._eco_mode == new_mode:
+            return
+        self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+        str(HVAC.Event.ECO_MODE.value), str(int(new_mode)+1))
+        self._eco_mode = new_mode
+
+    def __do_query_current_fan(self):
+        """Helper to perform the actual query of the fan mode"""
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.FAN_MODE.value)
+
+    def last_fan_mode(self):
+        """Returns last cached fan mode, no query is performed."""
+        return self._current_fan
+
+    @property
+    def current_fan(self):
+        """Returns the current fan mode by querying the remote controller."""
+        ev = self._query_waiters.request(self.__do_query_current_fan)
+        ev.wait(1.0)
+        return self._current_fan
+
+    @current_fan.setter
+    def current_fan(self, new_mode):
+        """Sets the new fan mode."""
+        if self._current_fan == new_mode:
+            return
+        mode = HVAC.FanModes[new_mode].value
+        self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+        str(HVAC.Event.FAN_MODE.value), mode)
+        self._current_fan = new_mode
+
+    def last_sch_stat(self):
+      """Returns last cached value of the schedule, no query is performed."""
+      return self._schedule_status
+  
+    def __do_query_sch_stat(self):
+      """Helper to perform the actual query of the schedule"""
+      self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+              HVAC.Event.SCHEDULE_STATUS.value)
+      
+    @property
+    def schedule_status(self):
+      """Returns the current schedule status by querying the remote controller."""
+      ev = self._query_waiters.request(self.__do_query_sch_stat)
+      ev.wait(1.0)
+      return self._schedule_status
+    
+    @schedule_status.setter
+    def schedule_status(self, new_mode):
+      """Set the schedule status"""
+      if self._schedule_status == new_mode:
+        return
+      mode = HVAC.ScheduleStatus[new_mode].value
+      self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+          HVAC.Event.SCHEDULE_STATUS, mode)
+      self._schedule_status = new_mode
 
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
@@ -1081,7 +1610,6 @@ class PowerSource(Enum):
   BATTERY = 1
   EXTERNAL = 2
 
-  
 class BatteryStatus(Enum):
   """Enum values representing battery state, reported by queries to
   battery-powered devices."""
@@ -1262,7 +1790,7 @@ class OccupancyGroup(LutronEntity):
 
   def __repr__(self):
     """Returns a stringified representation of this object."""
-    return str({'area_name' : self.area.name,
+    return str({'area_name' : self._area.name,
                 'id' : self.id,
                 'state' : self.state})
 
