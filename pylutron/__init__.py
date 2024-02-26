@@ -293,6 +293,7 @@ class LutronXmlDbParser(object):
       'max_temp_cool': hvac_xml.get('MaxCoolSet'),
       'min_temp_heat': hvac_xml.get('MinHeatSet'),
       'max_temp_heat': hvac_xml.get('MaxHeatSet'),
+      'heat_cool_delta': hvac_xml.get('HeatCoolDelta'),
     }
     return HVAC(self._lutron, **kwargs)
 
@@ -782,6 +783,7 @@ class HVAC(LutronEntity):
         max_temp_cool,
         min_temp_heat,
         max_temp_heat,
+        heat_cool_delta,
     ):
         """Initializes the HVAC controller."""
         super(HVAC, self).__init__(lutron, name, uuid)
@@ -789,6 +791,7 @@ class HVAC(LutronEntity):
         self._integration_id = integration_id
         self._lutron.register_id(HVAC._CMD_TYPE, self)
         self._temp_units = "F" if temp_units == 1 else "C"
+        self._heat_cool_delta = heat_cool_delta
         self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
         self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
         self._avail_misc_features = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_misc_features)]
@@ -827,6 +830,11 @@ class HVAC(LutronEntity):
     def avail_misc_features(self):
         """The available miscellaneous features"""
         return self._avail_misc_features
+    
+    @property
+    def heat_cool_delta(self):
+        """The required delta between heat and cool setpoints"""
+        return self._heat_cool_delta
 
     def handle_update(self, args):
         """Handles an event update for this object, e.g. temp level change."""
