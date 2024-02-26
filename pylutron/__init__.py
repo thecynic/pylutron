@@ -808,6 +808,7 @@ class HVAC(LutronEntity):
         self._setpoint_cool_f = 0
         self._setpoint_heat_f = 0
         _LOGGER.info("################ DONE INIT HVAC %s", vars(self))
+        _LOGGER.error('################ ECO init %s ', self._eco_mode)
 
     def __str__(self):
         """Returns a pretty-printed string for this object."""
@@ -1126,6 +1127,7 @@ class HVAC(LutronEntity):
 
     def last_eco_mode(self):
         """Returns last cached value of the eco mode, no query is performed."""
+        _LOGGER.error('################ ECO %s ', self._eco_mode)
         return self._eco_mode
 
     @property
