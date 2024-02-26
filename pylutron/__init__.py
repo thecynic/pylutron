@@ -917,8 +917,9 @@ class HVAC(LutronEntity):
 
         def _u_eco_mode(mode):
             """Handles eco mode status"""
-            if self._eco_mode != bool(int(mode)):
-              self._eco_mode = bool(int(mode))
+            mode = int(mode)-1
+            if self._eco_mode != bool(mode):
+              self._eco_mode = bool(mode)
               self._query_waiters.notify()
               self._dispatch_event(HVAC.Event.ECO_MODE, {'eco_mode': self._eco_mode})
               return True
@@ -1144,7 +1145,7 @@ class HVAC(LutronEntity):
         if self._eco_mode == new_mode:
             return
         self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
-        str(HVAC.Event.ECO_MODE.value), str(int(new_mode)))
+        str(HVAC.Event.ECO_MODE.value), str(int(new_mode)+1))
         self._eco_mode = new_mode
 
     def __do_query_current_fan(self):
