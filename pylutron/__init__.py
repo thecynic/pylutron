@@ -792,6 +792,7 @@ class HVAC(LutronEntity):
         self._operating_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_op_modes)]
         self._fan_modes = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_fan_modes)]
         self._avail_misc_features = [slugify(mode, separator='_').upper() for mode in re.split(r"\s*,\s*", avail_misc_features)]
+        self._eco_mode = False
         self._min_temp_cool = min_temp_cool
         self._max_temp_cool = max_temp_cool
         self._min_temp_heat = min_temp_heat
@@ -834,70 +835,93 @@ class HVAC(LutronEntity):
             """Handles current temp interaction"""
             if self._current_temp_f != float(temp):
               self._current_temp_f = float(temp)
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp_f})
-            return True
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_CURRENT_F, {'current_temp_f': self._current_temp_f})
+              return True
+            return False
         
         def _u_current_temp_c(temp):
             """Handles current temp interaction"""
             if self._current_temp_c != float(temp):
               self._current_temp_c = float(temp)
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp_f})
-            return True
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_CURRENT_C, {'current_temp_c': self._current_temp_f})
+              return True
+            return False
 
         def _u_setpoints_f(heat, cool):
             """Handles setpoint interaction"""
             if self._setpoint_cool_f != float(cool):
               self._setpoint_cool_f = float(cool)
+              notify = True
             if self._setpoint_heat_f != float(heat):
               self._setpoint_heat_f = float(heat)
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'setpoints_f': self._setpoint_cool_f})
-            return True
+              notify = True
+            if notify is not None:
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'setpoints_f': self._setpoint_cool_f})
+              return True
+            return False
         
         def _u_setpoints_c(heat, cool):
             """Handles setpoint interaction"""
             if self._setpoint_cool_c != float(cool):
               self._setpoint_cool_c = float(cool)
+              notify = True
             if self._setpoint_heat_c != float(heat):
               self._setpoint_heat_c = float(heat)
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_C, {'setpoints_c': self._setpoint_cool_c})
-            return True
+              notify = True
+            if notify is not None:
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_C, {'setpoints_c': self._setpoint_cool_c})
+              return True
+            return False
 
         def _u_operating_mode(mode):
             """Handles operating mode interaction"""
             if self._current_mode != HVAC.OperatingModes(int(mode)).name:
               self._current_mode = HVAC.OperatingModes(int(mode)).name
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
-            return True
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.OPERATING_MODE, {'current_mode': self._current_mode})
+              return True
+            return False
 
         def _u_fan_mode(mode):
             """Handles fan mode interaction"""
             _LOGGER.info('################ UPDATING HVAC FAN MODE %s as %s', self._current_fan,HVAC.FanModes(int(mode)).name)
             if self._current_fan != HVAC.FanModes(int(mode)).name:
               self._current_fan = HVAC.FanModes(int(mode)).name
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
-            return True
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.FAN_MODE, {'current_fan': self._current_fan})
+              return True
+            return False
 
         def _u_call_status(mode):
             """Handles call status"""
             if self._call_status != HVAC.CallStatus(int(mode)).name:
               self._call_status = HVAC.CallStatus(int(mode)).name
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
-            return True
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.CALL_STATUS, {'call_status': self._call_status})
+              return True
+            return False
         
         def _u_schedule_status(mode):
             """Handles schedule status"""
             if self._schedule_status != HVAC.ScheduleStatus(int(mode)).name:
               self._schedule_status = HVAC.ScheduleStatus(int(mode)).name
-            self._query_waiters.notify()
-            self._dispatch_event(HVAC.Event.SCHEDULE_STATUS, {'schedule_status': self._schedule_status})
-            return True
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.SCHEDULE_STATUS, {'schedule_status': self._schedule_status})
+              return True
+            return False
+
+        def _u_eco_mode(mode):
+            """Handles eco mode status"""
+            if self._eco_mode != bool(int(mode)):
+              self._eco_mode = bool(int(mode))
+              self._query_waiters.notify()
+              self._dispatch_event(HVAC.Event.ECO_MODE, {'eco_mode': self._eco_mode})
+              return True
+            return False
         
         _LOGGER.info('################ HAVE IT ASSSS %s', args[0])
         try:
@@ -916,6 +940,7 @@ class HVAC(LutronEntity):
           HVAC.Event.TEMP_CURRENT_C: (_u_current_temp_c, 1),
           HVAC.Event.TEMP_SETPOINTS_C: (_u_setpoints_c, 2),
           HVAC.Event.SCHEDULE_STATUS: (_u_schedule_status, 1),
+          HVAC.Event.ECO_MODE: (_u_eco_mode, 1),
         }
         if event in handler_functions:
             _LOGGER.info('################ HAVE IT %s', event)
@@ -1071,7 +1096,7 @@ class HVAC(LutronEntity):
             HVAC.Event.OPERATING_MODE.value)
 
     def last_mode(self):
-        """Returns last cached value of the temp level, no query is performed."""
+        """Returns last cached value of the operating mode, no query is performed."""
         return self._current_mode
 
     @property
@@ -1093,6 +1118,32 @@ class HVAC(LutronEntity):
         self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
         str(HVAC.Event.OPERATING_MODE.value), mode)
         self._current_mode = new_mode
+
+    def __do_query_current_eco_mode(self):
+        """Helper to perform the actual query of the current eco mode"""
+        self._lutron.send(Lutron.OP_QUERY, HVAC._CMD_TYPE, self._integration_id,
+            HVAC.Event.ECO_MODE.value)
+
+    def last_eco_mode(self):
+        """Returns last cached value of the eco mode, no query is performed."""
+        return self._eco_mode
+
+    @property
+    def eco_mode(self):
+        """Returns the eco mode by querying the remote controller."""
+        ev = self._query_waiters.request(self.__do_query_current_eco_mode)
+        ev.wait(1.0)
+        return self._eco_mode
+
+    @eco_mode.setter
+    def eco_mode(self, new_mode):
+        """Sets the new eco mode."""
+        _LOGGER.info('################ HVAC %s as %s', new_mode, self._eco_mode)
+        if self._eco_mode == new_mode:
+            return
+        self._lutron.send(Lutron.OP_EXECUTE, HVAC._CMD_TYPE, self._integration_id,
+        str(HVAC.Event.ECO_MODE.value), str(int(new_mode)))
+        self._eco_mode = new_mode
 
     def __do_query_current_fan(self):
         """Helper to perform the actual query of the fan mode"""
