@@ -852,13 +852,14 @@ class HVAC(LutronEntity):
 
         def _u_setpoints_f(heat, cool):
             """Handles setpoint interaction"""
+            notify = False
             if self._setpoint_cool_f != float(cool):
               self._setpoint_cool_f = float(cool)
               notify = True
             if self._setpoint_heat_f != float(heat):
               self._setpoint_heat_f = float(heat)
               notify = True
-            if notify is not None:
+            if notify:
               self._query_waiters.notify()
               self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_F, {'setpoints_f': self._setpoint_cool_f})
               return True
@@ -866,13 +867,14 @@ class HVAC(LutronEntity):
         
         def _u_setpoints_c(heat, cool):
             """Handles setpoint interaction"""
+            notify = False
             if self._setpoint_cool_c != float(cool):
               self._setpoint_cool_c = float(cool)
               notify = True
             if self._setpoint_heat_c != float(heat):
               self._setpoint_heat_c = float(heat)
               notify = True
-            if notify is not None:
+            if notify:
               self._query_waiters.notify()
               self._dispatch_event(HVAC.Event.TEMP_SETPOINTS_C, {'setpoints_c': self._setpoint_cool_c})
               return True
