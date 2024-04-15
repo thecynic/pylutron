@@ -10,13 +10,11 @@ __copyright__ = "Copyright 2016, Dima Zavin"
 from datetime import timedelta
 from enum import Enum
 import logging
-import re
 import socket
 import telnetlib
 import threading
 import time
 
-from slugify import slugify
 from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
@@ -780,16 +778,16 @@ class HVAC(LutronEntity):
         self._temp_units = "F" if temp_units == 1 else "C"
         self._heat_cool_delta = heat_cool_delta if heat_cool_delta else 3
         self._operating_modes = [
-          slugify(mode, separator='_').upper() 
-          for mode in re.split(r"\s*,\s*", avail_op_modes)
+          '_'.join(item.strip().split()).upper() 
+          for item in avail_op_modes.split(',')
         ]
         self._fan_modes = [
-          slugify(mode, separator='_').upper() 
-          for mode in re.split(r"\s*,\s*", avail_fan_modes)
+          '_'.join(item.strip().split()).upper() 
+          for item in avail_fan_modes.split(',')
         ]
         self._avail_misc_features = [
-          slugify(mode, separator='_').upper() 
-          for mode in re.split(r"\s*,\s*", avail_misc_features)
+          '_'.join(item.strip().split()).upper() 
+          for item in avail_misc_features.split(',')
         ]
         self._eco_mode = False
         self._min_temp_cool = min_temp_cool
