@@ -964,22 +964,19 @@ class HVAC(LutronEntity):
           return False  
 
         handler_functions = {
-          HVAC.Event.TEMP_CURRENT_F: (_u_current_temp_f, 1),
-          HVAC.Event.TEMP_SETPOINTS_F: (_u_setpoints_f, 2),
-          HVAC.Event.OPERATING_MODE: (_u_operating_mode, 1),
-          HVAC.Event.FAN_MODE: (_u_fan_mode, 1),
-          HVAC.Event.CALL_STATUS: (_u_call_status,1),
-          HVAC.Event.TEMP_CURRENT_C: (_u_current_temp_c, 1),
-          HVAC.Event.TEMP_SETPOINTS_C: (_u_setpoints_c, 2),
-          HVAC.Event.SCHEDULE_STATUS: (_u_schedule_status, 1),
-          HVAC.Event.ECO_MODE: (_u_eco_mode, 1),
+          HVAC.Event.TEMP_CURRENT_F: _u_current_temp_f,
+          HVAC.Event.TEMP_SETPOINTS_F: _u_setpoints_f,
+          HVAC.Event.OPERATING_MODE: _u_operating_mode,
+          HVAC.Event.FAN_MODE: _u_fan_mode,
+          HVAC.Event.CALL_STATUS: _u_call_status,
+          HVAC.Event.TEMP_CURRENT_C: _u_current_temp_c,
+          HVAC.Event.TEMP_SETPOINTS_C: _u_setpoints_c,
+          HVAC.Event.SCHEDULE_STATUS: _u_schedule_status,
+          HVAC.Event.ECO_MODE: _u_eco_mode,
         }
         if event in handler_functions:
-            handler, num_args = handler_functions[event]
-            if num_args == 1:
-                handler(args[1])
-            elif num_args == 2:
-                handler(args[1], args[2])
+            handler = handler_functions[event]
+            handler(*args[1:])
 
         return True
 
