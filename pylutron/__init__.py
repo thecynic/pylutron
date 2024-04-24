@@ -59,7 +59,6 @@ class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
-  #PROMPT = b'GNET> '
   PROMPT = b'> '
 
   def __init__(self, host, user, password, recv_callback):
@@ -137,7 +136,6 @@ class LutronConnection(threading.Thread):
     self._telnet.write(self._user + b'\r\n')
     self._telnet.read_until(LutronConnection.PW_PROMPT, timeout=3)
     self._telnet.write(self._password + b'\r\n')
-    #self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
     self._telnet.read_until(b'\n')
     prompt = self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
 
@@ -402,7 +400,6 @@ class LutronXmlDbParser(object):
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
       name = 'Dimmer ' + direction
-
     if not name:
       name = "Unknown Button"
     button = Button(self._lutron, keypad,
@@ -436,7 +433,6 @@ class LutronXmlDbParser(object):
   def _parse_led(self, keypad, component_xml):
     """Parses an LED device that part of a keypad."""
     component_num = int(component_xml.get('ComponentNumber'))
-
     led_base = 80
     if keypad.type == 'MAIN_REPEATER':
       led_base = 100
@@ -782,13 +778,11 @@ class Output(LutronEntity):
 
   def handle_update(self, args):
     """Handles an event update for this object, e.g. dimmer level change."""
-    #_LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
     _LOGGER.debug("handle_update output %d -- %s" % (self._integration_id, args))
     state = int(args[0])
     if state != Output._ACTION_ZONE_LEVEL:
       return False
     level = float(args[1])
-    #_LOGGER.debug("Updating %d(%s): s=%d l=%f" % (
     _LOGGER.debug("Updating output id=%d (%s): s=%d l=%f" % (
         self._integration_id, self._name, state, level))
     self._level = level
@@ -939,7 +933,6 @@ class Button(KeypadComponent):
   _ACTION_RELEASE = 4
   _ACTION_HOLD = 5
   _ACTION_DOUBLE_TAP = 6
-  #_ACTION_DOUBLE_CLICK = 6
   _ACTION_HOLD_RELEASE = 32
 
   class Event(LutronEvent):
@@ -986,9 +979,7 @@ class Button(KeypadComponent):
   def __repr__(self):
     """String representation of the Button object."""
     return str({'name': self.name, 'num': self.number,
-               #'type': self._button_type, 'direction': self._direction})
                'type': self._button_type, 'direction': self._direction, 'led_logic': self._led_logic})
-
 
   @property
   def button_type(self):
@@ -1030,15 +1021,11 @@ class Button(KeypadComponent):
     _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
                   self._keypad.name, self, action, params))
     ev_map = {
-        #Button._ACTION_PRESS: Button.Event.PRESSED,
-        #Button._ACTION_RELEASE: Button.Event.RELEASED,
-        #Button._ACTION_DOUBLE_CLICK: Button.Event.DOUBLE_CLICKED
         Button._ACTION_PRESS: Button.Event.PRESS,
         Button._ACTION_RELEASE: Button.Event.RELEASE,
         Button._ACTION_HOLD: Button.Event.HOLD,
         Button._ACTION_DOUBLE_TAP: Button.Event.DOUBLE_TAP,
         Button._ACTION_HOLD_RELEASE: Button.Event.HOLD_RELEASE
-
     }
     if action not in ev_map:
       _LOGGER.debug("Unknown action %d for button %d in keypad %s" % (
@@ -1058,10 +1045,8 @@ class Led(KeypadComponent):
 
     STATE_CHANGED: The button has been pressed.
         Params:
-          #state: The boolean value of the new LED state.
           state: The value of the new LED state.
           0= off, 1= on, 2= 1 flash/sec, 3= 10 flash/sec
-
     """
     STATE_CHANGED = 1
 
@@ -1099,11 +1084,9 @@ class Led(KeypadComponent):
     return self._state
 
   @state.setter
-  #def state(self, new_state: bool):
   def state(self, new_state):
     """Sets the new led state.
 
-    #new_state: bool
     new_state
     """
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
@@ -1124,7 +1107,6 @@ class Led(KeypadComponent):
           params, action, self.number, self._keypad.name))
       return False
     self._state = params[0]
-    #self._state = bool(params[0])
     self._query_waiters.notify()
     self._dispatch_event(Led.Event.STATE_CHANGED, {'state': self._state})
     return True
@@ -1146,7 +1128,6 @@ class Keypad(LutronEntity):
     self._components = {}
     self._location = location
     self._integration_id = integration_id
-    #self._type = keypad_type
     self._type = keypad_type if keypad_type else 'PHANTOM'
 
     self._lutron.register_id(Keypad._CMD_TYPE, self)
@@ -1201,7 +1182,6 @@ class Keypad(LutronEntity):
     component = int(args[0])
     action = int(args[1])
     params = [int(x) for x in args[2:]]
-    #_LOGGER.debug("Updating %d(%s): c=%d a=%d params=%s" % (
     _LOGGER.debug("Updating keypad id=%d (%s): component=%d action=%d params=%s" % (
         self._integration_id, self._name, component, action, params))
     if component in self._components:
