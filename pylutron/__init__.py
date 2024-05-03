@@ -283,14 +283,15 @@ class LutronXmlDbParser(object):
   def _parse_area(self, area_xml, location):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
-    path = "" if (location is None) else location + " "
-    name = path + area_xml.get('Name')
+    location = "" if (location is None) else location
+    name = area_xml.get('Name')
     occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
     occupancy_group = self._occupancy_groups.get(occupancy_group_id)
     if not occupancy_group:
       _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", area_name, occupancy_group_id)
     area = Area(self._lutron,
                 name=name,
+                location=location,
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group=occupancy_group)
     if int(area_xml.get('IntegrationID')) != 0 :
@@ -1405,9 +1406,10 @@ class OccupancyGroup(LutronEntity):
 
 class Area(object):
   """An area (i.e. a room) that contains devices/outputs/etc."""
-  def __init__(self, lutron, name, integration_id, occupancy_group):
+  def __init__(self, lutron, name, location, integration_id, occupancy_group):
     self._lutron = lutron
     self._name = name
+    self._location = location
     self._integration_id = integration_id
     self._occupancy_group = occupancy_group
     self._outputs = []
@@ -1440,6 +1442,11 @@ class Area(object):
   def name(self):
     """Returns the name of this area."""
     return self._name
+
+  @property
+  def location(self):
+    """Returns the name of this area."""
+    return self._location
 
   @property
   def id(self):
