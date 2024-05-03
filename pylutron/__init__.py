@@ -288,15 +288,12 @@ class LutronXmlDbParser(object):
     occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
     occupancy_group = self._occupancy_groups.get(occupancy_group_id)
     if not occupancy_group:
-      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", area_name, occupancy_group_id)
+      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", name, occupancy_group_id)
     area = Area(self._lutron,
                 name=name,
                 location=location,
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group=occupancy_group)
-    if int(area_xml.get('IntegrationID')) != 0 :
-      # let's setup an OccupancyGroup for this integration ID
-      area.add_occupancy_group()
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
@@ -1343,11 +1340,13 @@ class OccupancyGroup(LutronEntity):
   def _bind_area(self, area):
     self._area = area
     self._integration_id = area.id
-    self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
+    if self._integration_id != 0:
+      self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
 
   @property
   def id(self):
-    """The integration id"""
+    """The integration id, which is the area's integration_id
+    """
     return self._integration_id
 
   @property
@@ -1432,11 +1431,6 @@ class Area(object):
     """Adds a motion sensor object that's part of this area, only used during
     initial parsing."""
     self._sensors.append(sensor)
-    self.add_occupancy_group()
-
-  def add_occupancy_group(self):
-    if not self._occupancy_group:
-      self._occupancy_group = OccupancyGroup(self._lutron, self)
 
   @property
   def name(self):
