@@ -575,15 +575,16 @@ class Lutron(object):
         (cmd, str(integration_id)) + tuple((str(x) for x in args if x is not None)))
     self._conn.send(op + out_cmd)
 
-  def load_xml_db(self, cache_path=None):
-    """Load the Lutron database from the server.
+  def load_xml_db(self, cache_path=None, refresh_data=True):
+    """Load the Lutron database from the server if refresh_data is True
 
-    If a locally cached copy is available, use that instead.
+    If not, if a locally cached copy is available, use that instead, or
+    create one and store it
     """
 
     xml_db = None
     loaded_from = None
-    if cache_path:
+    if cache_path and not refresh_data:
       try:
         with open(cache_path, 'rb') as f:
           xml_db = f.read()
@@ -596,6 +597,10 @@ class Lutron(object):
       with urllib.request.urlopen(url) as xmlfile:
         xml_db = xmlfile.read()
         loaded_from = 'repeater'
+        if cache_path and not refresh_data:
+          with open(cache_path, 'wb') as f:
+            f.write(xml_db)
+            _LOGGER.info("Stored db as %s" % cache_path)
 
     _LOGGER.info("Loaded xml db from %s" % loaded_from)
 
