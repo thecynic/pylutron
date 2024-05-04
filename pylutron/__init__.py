@@ -323,7 +323,9 @@ class LutronXmlDbParser(object):
             'INTERNATIONAL_SEETOUCH_KEYPAD',
             'WCI',
             'QS_IO_INTERFACE',
-            'GRAFIK_T_HYBRID_KEYPAD'):
+            'GRAFIK_T_HYBRID_KEYPAD',
+            'HWI_SLIM'
+        ):
 
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
