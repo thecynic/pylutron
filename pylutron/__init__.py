@@ -283,7 +283,7 @@ class LutronXmlDbParser(object):
   def _parse_area(self, area_xml, location):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
-    location = "" if (location is None) else location
+    location = location or ""
     name = area_xml.get('Name')
     occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
     occupancy_group = self._occupancy_groups.get(occupancy_group_id)
@@ -706,7 +706,7 @@ class LutronEntity(object):
     for handler, context in self._subscribers:
       handler(self, context, event, params)
 
-  def subscribe(self, handler: LutronEventHandler, context):
+  def subscribe(self, handler: LutronEventHandler, context) -> Callable[[], None]:
     """Subscribes to events from this entity.
 
     handler: A callable object that takes the following arguments (in order)
@@ -716,8 +716,10 @@ class LutronEntity(object):
              params: a dict of event-specific parameters
 
     context: User-supplied, opaque object that will be passed to handler.
+    Returns: A callable that can be used to unsubscribe from the event.
     """
     self._subscribers.append((handler, context))
+    return lambda: self._subscribers.remove((handler, context))
 
   def handle_update(self, args):
     """The handle_update callback is invoked when an event is received
@@ -1446,7 +1448,7 @@ class Area(object):
 
   @property
   def location(self):
-    """Returns the name of this area."""
+    """Returns the location of this area which is the name of the parent area or the empty string."""
     return self._location
 
   @property
