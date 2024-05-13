@@ -312,7 +312,11 @@ class LutronXmlDbParser(object):
       for device_xml in devs:
         if device_xml.tag != 'Device':
           continue
-        if device_xml.get('DeviceType') in (
+        if (device_type := device_xml.get('DeviceType')) is None:
+          # phantom keypad doesn't have a DeviceType
+          device_type = 'PHANTOM'
+        if device_type in (
+            'PHANTOM',
             'HWI_SEETOUCH_KEYPAD',
             'SEETOUCH_KEYPAD',
             'SEETOUCH_TABLETOP_KEYPAD',
@@ -326,17 +330,15 @@ class LutronXmlDbParser(object):
             'GRAFIK_T_HYBRID_KEYPAD',
             'HWI_SLIM'
         ):
-
-          keypad = self._parse_keypad(device_xml, device_group)
+          keypad = self._parse_keypad(device_xml, device_group, device_type)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
           motion_sensor = self._parse_motion_sensor(device_xml)
           area.add_sensor(motion_sensor)
         #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
         else:
-          #phantom keypad doesn't have a DeviceType
-          keypad = self._parse_keypad(device_xml, device_group)
-          area.add_keypad(keypad)
+          _LOGGER.warning(f"Unknown {device_xml.get('DeviceType')} Device type")
+
     return area
 
 
@@ -355,7 +357,7 @@ class LutronXmlDbParser(object):
       return Shade(self._lutron, **kwargs)
     return Output(self._lutron, **kwargs)
 
-  def _parse_keypad(self, keypad_xml, device_group):
+  def _parse_keypad(self, keypad_xml, device_group, device_type):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
     # in HW the keypad standard name is CSD 001, we use the integration ID name instead
     name = keypad_xml.get('Name')
@@ -364,7 +366,7 @@ class LutronXmlDbParser(object):
     keypad = Keypad(self._lutron,
                     name=name,
                     #name=keypad_xml.get('Name'),
-                    keypad_type=keypad_xml.get('DeviceType'),
+                    keypad_type=device_type,
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')),
                     uuid=keypad_xml.get('UUID'))
