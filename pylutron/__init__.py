@@ -313,6 +313,7 @@ class LutronXmlDbParser(object):
         if device_xml.tag != 'Device':
           continue
         if device_xml.get('DeviceType') in (
+            None,
             'HWI_SEETOUCH_KEYPAD',
             'SEETOUCH_KEYPAD',
             'SEETOUCH_TABLETOP_KEYPAD',
@@ -326,7 +327,7 @@ class LutronXmlDbParser(object):
             'GRAFIK_T_HYBRID_KEYPAD',
             'HWI_SLIM'
         ):
-
+          # phantom keypad doesn't have a DeviceType
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
@@ -334,9 +335,8 @@ class LutronXmlDbParser(object):
           area.add_sensor(motion_sensor)
         #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
         else:
-          #phantom keypad doesn't have a DeviceType
-          keypad = self._parse_keypad(device_xml, device_group)
-          area.add_keypad(keypad)
+          _LOGGER.warning(f"Unknown {device_xml.get('DeviceType')} Device type")
+
     return area
 
 
