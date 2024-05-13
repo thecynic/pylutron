@@ -1137,8 +1137,7 @@ class Keypad(LutronEntity):
     self._components = {}
     self._location = location
     self._integration_id = integration_id
-    self._type = keypad_type if keypad_type else 'PHANTOM'
-
+    self._type = keypad_type
     self._lutron.register_id(Keypad._CMD_TYPE, self)
 
   def add_button(self, button):
