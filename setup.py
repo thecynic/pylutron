@@ -6,7 +6,7 @@ setup(
     name = 'pylutron',
     version = 'TEMPLATE_VERSION',
     license = 'MIT',
-    description = 'Python library for Lutron RadioRA 2',
+    description = 'Python library for Lutron RadioRA 2 and HomeWorks',
     author = 'Dima Zavin',
     author_email = 'thecynic@gmail.com',
     url = 'http://github.com/thecynic/pylutron',
