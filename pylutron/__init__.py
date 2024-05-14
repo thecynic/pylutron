@@ -355,6 +355,9 @@ class LutronXmlDbParser(object):
     }
     if output_type == 'SYSTEM_SHADE':
       return Shade(self._lutron, **kwargs)
+    elif output_type == 'MOTOR':
+      return Motor(self._lutron, **kwargs)
+
     return Output(self._lutron, **kwargs)
 
   def _parse_keypad(self, keypad_xml, device_group, device_type):
@@ -846,18 +849,6 @@ class Output(LutronEntity):
 #    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE,
 #        Output._ACTION_ZONE_LEVEL, new_level, fade_time, delay)
 
-  def start_raising(self):
-    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_START_RAISING)
-
-  def start_lowering(self):
-    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_START_LOWERING)
-
-  def stop(self):
-    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_STOP)
-
   @property
   def watts(self):
     """Returns the configured maximum wattage for this output (not an actual
@@ -900,6 +891,34 @@ class Shade(Output):
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_STOP)
 
+class Motor(Output):
+  """This is the output entity for motors in Lutron universe."""
+
+  def start_raising(self):
+    """Starts raising the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_START_RAISING)
+
+  def start_lowering(self):
+    """Starts lowering the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_START_LOWERING)
+
+  def stop(self):
+    """Starts raising the motor."""
+    """ This doesn't seem to work"""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_STOP)
+
+  def jog_raise(self):
+    """Jog raise the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_JOG_RAISE)
+
+  def jog_lower(self):
+    """Jog lower the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_JOG_LOWER)
 
 class KeypadComponent(LutronEntity):
   """Base class for a keypad component such as a button, or an LED."""
