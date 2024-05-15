@@ -50,12 +50,16 @@ class InvalidSubscription(LutronException):
   Lutron.subscribe on an incompatible object."""
   pass
 
+class Controller(Enum):
+  UNKNOWN = 0
+  RADIORA2 = 1
+  HOMEWORKS = 2
 
 class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
-  PROMPT = b'GNET> '
+  PROMPT = b'> '
 
   def __init__(self, host, user, password, recv_callback):
     """Initializes the lutron connection, doesn't actually connect."""
@@ -69,6 +73,7 @@ class LutronConnection(threading.Thread):
     self._lock = threading.Lock()
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
+    self._controller = Controller.UNKNOWN
     self._done = False
 
     self.setDaemon(True)
@@ -131,7 +136,16 @@ class LutronConnection(threading.Thread):
     self._telnet.write(self._user + b'\r\n')
     self._telnet.read_until(LutronConnection.PW_PROMPT, timeout=3)
     self._telnet.write(self._password + b'\r\n')
-    self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
+    self._telnet.read_until(b'\n')
+    prompt = self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
+
+    if prompt == b'QNET> ':
+      self._controller = Controller.HOMEWORKS
+    elif prompt == b'GNET> ':
+      self._controller = Controller.RADIORA2
+    else:
+      _LOGGER.warning("unsupported lutron prompt: %s", prompt)
+    _LOGGER.info("Identified Lutron %s", self._controller)
 
     self._send_locked("#MONITORING,12,2")
     self._send_locked("#MONITORING,255,2")
