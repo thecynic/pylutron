@@ -320,6 +320,9 @@ class LutronXmlDbParser(object):
     }
     if output_type == 'SYSTEM_SHADE':
       return Shade(self._lutron, **kwargs)
+    elif output_type == 'MOTOR':
+      return Motor(self._lutron, **kwargs)
+
     return Output(self._lutron, **kwargs)
 
   def _parse_keypad(self, keypad_xml, device_group):
