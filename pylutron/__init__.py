@@ -290,7 +290,11 @@ class LutronXmlDbParser(object):
       for device_xml in devs:
         if device_xml.tag != 'Device':
           continue
-        if device_xml.get('DeviceType') in (
+        if (device_type := device_xml.get('DeviceType')) is None:
+          # phantom keypad doesn't have a DeviceType
+          device_type = 'PHANTOM'
+        if device_type in (
+            'PHANTOM',
             'HWI_SEETOUCH_KEYPAD',
             'SEETOUCH_KEYPAD',
             'SEETOUCH_TABLETOP_KEYPAD',
@@ -298,13 +302,21 @@ class LutronXmlDbParser(object):
             'HYBRID_SEETOUCH_KEYPAD',
             'MAIN_REPEATER',
             'HOMEOWNER_KEYPAD',
-            'GRAFIK_T_HYBRID_KEYPAD'):
-          keypad = self._parse_keypad(device_xml, device_group)
+            'INTERNATIONAL_SEETOUCH_KEYPAD',
+            'WCI',
+            'QS_IO_INTERFACE',
+            'GRAFIK_T_HYBRID_KEYPAD',
+            'HWI_SLIM'
+        ):
+          keypad = self._parse_keypad(device_xml, device_group, device_type)
           area.add_keypad(keypad)
         elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
           motion_sensor = self._parse_motion_sensor(device_xml)
           area.add_sensor(motion_sensor)
         #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
+        else:
+          _LOGGER.warning(f"Unknown {device_xml.get('DeviceType')} Device type")
+
     return area
 
   def _parse_output(self, output_xml):
@@ -322,11 +334,16 @@ class LutronXmlDbParser(object):
       return Shade(self._lutron, **kwargs)
     return Output(self._lutron, **kwargs)
 
-  def _parse_keypad(self, keypad_xml, device_group):
+  def _parse_keypad(self, keypad_xml, device_group, device_type):
     """Parses a keypad device (the Visor receiver is technically a keypad too)."""
+    # in HW the keypad standard name is CSD 001, we use the integration ID name instead
+    name = keypad_xml.get('Name')
+    if (keypad_xml.get('Name') == "CSD 001"):
+      name = f"keypad {keypad_xml.get('IntegrationID')}"
     keypad = Keypad(self._lutron,
-                    name=keypad_xml.get('Name'),
-                    keypad_type=keypad_xml.get('DeviceType'),
+                    name=name,
+                    #name=keypad_xml.get('Name'),
+                    keypad_type=device_type,
                     location=device_group.get('Name'),
                     integration_id=int(keypad_xml.get('IntegrationID')),
                     uuid=keypad_xml.get('UUID'))
@@ -339,6 +356,9 @@ class LutronXmlDbParser(object):
       comp_type = comp.get('ComponentType')
       if comp_type == 'BUTTON':
         button = self._parse_button(keypad, comp)
+        keypad.add_button(button)
+      elif comp_type == 'CCI':
+        button = self._parse_cci(keypad, comp)
         keypad.add_button(button)
       elif comp_type == 'LED':
         led = self._parse_led(keypad, comp)
@@ -364,15 +384,36 @@ class LutronXmlDbParser(object):
                     uuid=button_xml.get('UUID'))
     return button
 
+  def _parse_cci(self, keypad, component_xml):
+    """Parses a cci device that part of a keypad."""
+    component_number = int(component_xml.get('ComponentNumber'))
+    cci_xml = component_xml.find('CCI')
+    cci_type = cci_xml.get('ButtonType')
+    led_logic = cci_xml.get('LedLogic')
+    name = f"CCI {component_number}"
+    button = Button(self._lutron, keypad,
+                    name=name,
+                    engraving='',
+                    num=component_number,
+                    button_type=cci_type,
+                    direction=None,
+                    led_logic=led_logic,
+                    uuid=cci_xml.get('UUID'))
+    return button
+
+
   def _parse_led(self, keypad, component_xml):
     """Parses an LED device that part of a keypad."""
     component_num = int(component_xml.get('ComponentNumber'))
     led_base = 80
     if keypad.type == 'MAIN_REPEATER':
       led_base = 100
+    elif keypad.type == 'PHANTOM':
+      led_base = 2000
     led_num = component_num - led_base
+    name = f"LED {led_num}"
     led = Led(self._lutron, keypad,
-              name=('LED %d' % led_num),
+              name=name,
               led_num=led_num,
               component_num=component_num,
               uuid=component_xml.find('LED').get('UUID'))
