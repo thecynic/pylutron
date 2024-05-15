@@ -224,6 +224,13 @@ class LutronXmlDbParser(object):
     relevant Lutron objects and stuffs them into the appropriate hierarchy."""
     import xml.etree.ElementTree as ET
 
+    def visit_area(area_to_visit, location=None):
+      for areas_xml in area_to_visit.findall('Areas'):
+        for area_xml in areas_xml.findall('Area'):
+          area = self._parse_area(area_xml, location)
+          self.areas.append(area)
+          visit_area(area_xml, area.name)
+
     root = ET.fromstring(self._xml_db_str)
     # The structure is something like this:
     # <Areas>
@@ -256,27 +263,27 @@ class LutronXmlDbParser(object):
     # "house". It contains the real nested Areas tree, which is the one we want.
     top_area = root.find('Areas').find('Area')
     self.project_name = top_area.get('Name')
-    areas = top_area.find('Areas')
-    for area_xml in areas.iter('Area'):
-      area = self._parse_area(area_xml)
-      self.areas.append(area)
+    visit_area(top_area)
     return True
 
-  def _parse_area(self, area_xml):
+  def _parse_area(self, area_xml, location):
     """Parses an Area tag, which is effectively a room, depending on how the
     Lutron controller programming was done."""
+    location = location or ""
+    name = area_xml.get('Name')
     occupancy_group_id = area_xml.get('OccupancyGroupAssignedToID')
     occupancy_group = self._occupancy_groups.get(occupancy_group_id)
-    area_name = area_xml.get('Name')
     if not occupancy_group:
-      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", area_name, occupancy_group_id)
+      _LOGGER.warning("Occupancy Group not found for Area: %s; ID: %s", name, occupancy_group_id)
     area = Area(self._lutron,
-                name=area_name,
+                name=name,
+                location=location,
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group=occupancy_group)
     for output_xml in area_xml.find('Outputs'):
       output = self._parse_output(output_xml)
       area.add_output(output)
+
     # device group in our case means keypad
     # device_group.get('Name') is the location of the keypad
     for device_group in area_xml.find('DeviceGroups'):
@@ -1290,9 +1297,10 @@ class OccupancyGroup(LutronEntity):
 
 class Area(object):
   """An area (i.e. a room) that contains devices/outputs/etc."""
-  def __init__(self, lutron, name, integration_id, occupancy_group):
+  def __init__(self, lutron, name, location, integration_id, occupancy_group):
     self._lutron = lutron
     self._name = name
+    self._location = location
     self._integration_id = integration_id
     self._occupancy_group = occupancy_group
     self._outputs = []
@@ -1320,6 +1328,11 @@ class Area(object):
   def name(self):
     """Returns the name of this area."""
     return self._name
+
+  @property
+  def location(self):
+    """Returns the location of this area which is the name of the parent area or the empty string."""
+    return self._location
 
   @property
   def id(self):
