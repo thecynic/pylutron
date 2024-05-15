@@ -347,10 +347,14 @@ class LutronXmlDbParser(object):
 
   def _parse_button(self, keypad, component_xml):
     """Parses a button device that part of a keypad."""
+    component_number = int(component_xml.get('ComponentNumber'))
     button_xml = component_xml.find('Button')
+    engraving = button_xml.get('Engraving')
     name = button_xml.get('Engraving')
     button_type = button_xml.get('ButtonType')
     direction = button_xml.get('Direction')
+    led_logic = 0 if button_xml.get('LedLogic') is None else int(button_xml.get('LedLogic'))
+
     # Hybrid keypads have dimmer buttons which have no engravings.
     if button_type == 'SingleSceneRaiseLower':
       name = 'Dimmer ' + direction
@@ -358,9 +362,11 @@ class LutronXmlDbParser(object):
       name = "Unknown Button"
     button = Button(self._lutron, keypad,
                     name=name,
-                    num=int(component_xml.get('ComponentNumber')),
+                    engraving=engraving,
+                    num=component_number,
                     button_type=button_type,
                     direction=direction,
+                    led_logic=led_logic,
                     uuid=button_xml.get('UUID'))
     return button
 
@@ -843,31 +849,43 @@ class Button(KeypadComponent):
   events for (button presses)."""
   _ACTION_PRESS = 3
   _ACTION_RELEASE = 4
-  _ACTION_DOUBLE_CLICK = 6
+  _ACTION_HOLD = 5
+  _ACTION_DOUBLE_TAP = 6
+  _ACTION_HOLD_RELEASE = 32
 
   class Event(LutronEvent):
     """Button events that can be generated.
 
-    PRESSED: The button has been pressed.
+    PRESS: The button has been pressed, or the contact (CCI) is closed.
         Params: None
 
-    RELEASED: The button has been released. Not all buttons
+    RELEASE: The button has been released, or the contact (CCI) is open. Not all buttons
               generate this event.
         Params: None
 
-    DOUBLE_CLICKED: The button was double-clicked. Not all buttons
-              generate this event.
+    HOLD: The button has been hold. Not all buttons generate this event.
+        Params: None
+
+    DOUBLE_TAP: The button has been double tapped. Not all buttons generate this event.
+        Params: None
+
+    HOLD_RELEASE: The button has been released after an hold. Not all buttons generate this event.
         Params: None
     """
-    PRESSED = 1
-    RELEASED = 2
-    DOUBLE_CLICKED = 3
+    PRESS = 1
+    RELEASE = 2
+    HOLD = 3
+    DOUBLE_TAP = 4
+    HOLD_RELEASE = 5
 
-  def __init__(self, lutron, keypad, name, num, button_type, direction, uuid):
+
+  def __init__(self, lutron, keypad, name, engraving, num, button_type, direction, led_logic, uuid):
     """Initializes the Button class."""
     super(Button, self).__init__(lutron, keypad, name, num, num, uuid)
+    self._engraving = engraving
     self._button_type = button_type
     self._direction = direction
+    self._led_logic = led_logic
 
   def __str__(self):
     """Pretty printed string value of the Button object."""
@@ -877,12 +895,22 @@ class Button(KeypadComponent):
   def __repr__(self):
     """String representation of the Button object."""
     return str({'name': self.name, 'num': self.number,
-               'type': self._button_type, 'direction': self._direction})
+               'type': self._button_type, 'direction': self._direction, 'led_logic': self._led_logic})
 
   @property
   def button_type(self):
     """Returns the button type (Toggle, MasterRaiseLower, etc.)."""
     return self._button_type
+
+  @property
+  def engraving(self):
+    """Returns the button type (Toggle, MasterRaiseLower, etc.)."""
+    return self._engraving
+
+  @property
+  def led_logic(self):
+    """Returns the led logic for the button."""
+    return self._led_logic
 
   def press(self):
     """Triggers a simulated button press to the Keypad."""
@@ -897,7 +925,7 @@ class Button(KeypadComponent):
   def double_click(self):
     """Triggers a simulated button double_click to the Keypad."""
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
-                      self.component_number, Button._ACTION_DOUBLE_CLICK)
+                      self.component_number, Button._ACTION_DOUBLE_TAP)
 
   def tap(self):
     """Triggers a simulated button tap to the Keypad."""
@@ -909,9 +937,11 @@ class Button(KeypadComponent):
     _LOGGER.debug('Keypad: "%s" %s Action: %s Params: %s"' % (
                   self._keypad.name, self, action, params))
     ev_map = {
-        Button._ACTION_PRESS: Button.Event.PRESSED,
-        Button._ACTION_RELEASE: Button.Event.RELEASED,
-        Button._ACTION_DOUBLE_CLICK: Button.Event.DOUBLE_CLICKED
+        Button._ACTION_PRESS: Button.Event.PRESS,
+        Button._ACTION_RELEASE: Button.Event.RELEASE,
+        Button._ACTION_HOLD: Button.Event.HOLD,
+        Button._ACTION_DOUBLE_TAP: Button.Event.DOUBLE_TAP,
+        Button._ACTION_HOLD_RELEASE: Button.Event.HOLD_RELEASE
     }
     if action not in ev_map:
       _LOGGER.debug("Unknown action %d for button %d in keypad %s" % (
