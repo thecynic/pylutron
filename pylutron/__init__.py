@@ -1232,8 +1232,7 @@ class OccupancyGroup(LutronEntity):
 
   @property
   def id(self):
-    """The integration id, which is the area's integration_id
-    """
+    """The integration id, which is the area's integration_id"""
     return self._integration_id
 
   @property
