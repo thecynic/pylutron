@@ -1227,11 +1227,12 @@ class OccupancyGroup(LutronEntity):
   def _bind_area(self, area):
     self._area = area
     self._integration_id = area.id
-    self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
+    if self._integration_id != 0:
+      self._lutron.register_id(OccupancyGroup._CMD_TYPE, self)
 
   @property
   def id(self):
-    """The integration id"""
+    """The integration id, which is the area's integration_id"""
     return self._integration_id
 
   @property
