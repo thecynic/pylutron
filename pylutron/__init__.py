@@ -78,6 +78,11 @@ class LutronConnection(threading.Thread):
 
     self.setDaemon(True)
 
+  @property
+  def controller(self):
+    """Return the type of Lutron controller."""
+    return self._controller
+
   def connect(self):
     """Connects to the lutron controller."""
     if self._connected or self.is_alive():
