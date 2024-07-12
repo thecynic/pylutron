@@ -779,7 +779,7 @@ class Output(LutronEntity):
   @property
   def is_dimmable(self):
     """Returns a boolean of whether or not the output is dimmable."""
-    return self.type not in ('NON_DIM', 'NON_DIM_INC', 'NON_DIM_ELV', 'EXHAUST_FAN_TYPE', 'RELAY_LIGHTING') and not self.type.startswith('CCO_')
+    return not self.type.startswith('NON_DI') and not self.type.startswith('CCO_') and not self.type.startswith('SWI') and not self.type.startswith('RELAY') and not self.type.startswith('HVAC')
 
 
 class Shade(Output):
