@@ -11,10 +11,10 @@ from datetime import timedelta
 from enum import Enum
 import logging
 import socket
-import telnetlib
 import threading
 import time
 
+from pylutron._telnetlib import telnetlib
 from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
