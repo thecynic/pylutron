@@ -298,6 +298,7 @@ class LutronXmlDbParser(object):
             'HYBRID_SEETOUCH_KEYPAD',
             'MAIN_REPEATER',
             'HOMEOWNER_KEYPAD',
+            'PALLADIOM_KEYPAD',
             'GRAFIK_T_HYBRID_KEYPAD'):
           keypad = self._parse_keypad(device_xml, device_group)
           area.add_keypad(keypad)
