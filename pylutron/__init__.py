@@ -322,6 +322,9 @@ class LutronXmlDbParser(object):
     }
     if output_type == 'SYSTEM_SHADE':
       return Shade(self._lutron, **kwargs)
+    elif output_type == 'MOTOR':
+      return Motor(self._lutron, **kwargs)
+
     return Output(self._lutron, **kwargs)
 
   def _parse_keypad(self, keypad_xml, device_group):
@@ -662,10 +665,15 @@ class LutronEntity(object):
 
 class Output(LutronEntity):
   """This is the output entity in Lutron universe. This generally refers to a
-  switched/dimmed load, e.g. light fixture, outlet, etc."""
+  switched/dimmed load, e.g. light fixture, outlet, motor, etc."""
   _CMD_TYPE = 'OUTPUT'
   _ACTION_ZONE_LEVEL = 1
   _ACTION_ZONE_FLASH = 5
+  _ACTION_START_RAISING = 2
+  _ACTION_START_LOWERING = 3
+  _ACTION_STOP = 4
+  _ACTION_JOG_RAISE = 18
+  _ACTION_JOG_LOWER = 19
 
   class Event(LutronEvent):
     """Output events that can be generated.
@@ -708,12 +716,12 @@ class Output(LutronEntity):
 
   def handle_update(self, args):
     """Handles an event update for this object, e.g. dimmer level change."""
-    _LOGGER.debug("handle_update %d -- %s" % (self._integration_id, args))
+    _LOGGER.debug("handle_update output %d -- %s" % (self._integration_id, args))
     state = int(args[0])
     if state != Output._ACTION_ZONE_LEVEL:
       return False
     level = float(args[1])
-    _LOGGER.debug("Updating %d(%s): s=%d l=%f" % (
+    _LOGGER.debug("Updating output id=%d (%s): s=%d l=%f" % (
         self._integration_id, self._name, state, level))
     self._level = level
     self._query_waiters.notify()
@@ -760,7 +768,7 @@ class Output(LutronEntity):
     """Flashes the zone until a new level is set."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_ZONE_FLASH, self._fade_time(fade_time_seconds))
-    
+
 
 ## At some later date, we may want to also specify delay times
 #  def set_level(self, new_level, fade_time_seconds, delay):
@@ -781,8 +789,12 @@ class Output(LutronEntity):
   @property
   def is_dimmable(self):
     """Returns a boolean of whether or not the output is dimmable."""
-    return self.type not in ('NON_DIM', 'NON_DIM_INC', 'NON_DIM_ELV', 'EXHAUST_FAN_TYPE', 'RELAY_LIGHTING') and not self.type.startswith('CCO_')
+    return self.is_light and not self.type.startswith('NON_DIM')
 
+  @property
+  def is_light(self):
+    """Returns a boolean of whether or not the output is a light."""
+    return not self.type.startswith('CCO_') and not self.type.startswith('MOTOR') and self.type not in ('EXHAUST_FAN_TYPE', 'RELAY_LIGHTING')
 
 class Shade(Output):
   """This is the output entity for shades in Lutron universe."""
@@ -805,6 +817,34 @@ class Shade(Output):
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_STOP)
 
+class Motor(Output):
+  """This is the output entity for motors in Lutron universe."""
+
+  def start_raising(self):
+    """Starts raising the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_START_RAISING)
+
+  def start_lowering(self):
+    """Starts lowering the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_START_LOWERING)
+
+  def stop(self):
+    """Starts raising the motor."""
+    """ This doesn't seem to work"""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_STOP)
+
+  def jog_raise(self):
+    """Jog raise the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_JOG_RAISE)
+
+  def jog_lower(self):
+    """Jog lower the motor."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        Output._ACTION_JOG_LOWER)
 
 class KeypadComponent(LutronEntity):
   """Base class for a keypad component such as a button, or an LED."""
