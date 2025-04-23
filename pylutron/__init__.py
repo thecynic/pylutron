@@ -928,19 +928,27 @@ class Led(KeypadComponent):
   handle events for (led toggled by scenes)."""
   _ACTION_LED_STATE = 9
 
+  class State(Enum):
+    """Possible states of an OccupancyGroup."""
+    OFF = 0
+    ON = 1
+    NORMAL_FLASH = 2
+    RAPID_FLASH = 3
+
   class Event(LutronEvent):
     """Led events that can be generated.
 
     STATE_CHANGED: The button has been pressed.
         Params:
-          state: The boolean value of the new LED state.
+          state: The value of the new LED state.
+          0= off, 1= on, 2= 1 flash/sec, 3= 10 flash/sec
     """
     STATE_CHANGED = 1
 
   def __init__(self, lutron, keypad, name, led_num, component_num, uuid):
     """Initializes the Keypad LED class."""
     super(Led, self).__init__(lutron, keypad, name, led_num, component_num, uuid)
-    self._state = False
+    self._state = None
     self._query_waiters = _RequestHelper()
 
   def __str__(self):
@@ -971,10 +979,10 @@ class Led(KeypadComponent):
     return self._state
 
   @state.setter
-  def state(self, new_state: bool):
+  def state(self, new_state: int):
     """Sets the new led state.
 
-    new_state: bool
+    new_state
     """
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
                       self.component_number, Led._ACTION_LED_STATE,
@@ -993,7 +1001,7 @@ class Led(KeypadComponent):
       _LOGGER.debug("Unknown params %s (action %d on led %d in keypad %s)" % (
           params, action, self.number, self._keypad.name))
       return False
-    self._state = bool(params[0])
+    self._state = Led.State(int(params[0]))
     self._query_waiters.notify()
     self._dispatch_event(Led.Event.STATE_CHANGED, {'state': self._state})
     return True
