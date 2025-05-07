@@ -320,7 +320,7 @@ class LutronXmlDbParser(object):
       'integration_id': int(output_xml.get('IntegrationID')),
       'uuid': output_xml.get('UUID')
     }
-    if output_type == 'SYSTEM_SHADE':
+    if output_type in ('SYSTEM_SHADE', 'MOTOR'):
       return Shade(self._lutron, **kwargs)
     return Output(self._lutron, **kwargs)
 
@@ -760,7 +760,7 @@ class Output(LutronEntity):
     """Flashes the zone until a new level is set."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_ZONE_FLASH, self._fade_time(fade_time_seconds))
-    
+
 
 ## At some later date, we may want to also specify delay times
 #  def set_level(self, new_level, fade_time_seconds, delay):
@@ -793,17 +793,17 @@ class Shade(Output):
   def start_raise(self):
     """Starts raising the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_RAISE)
+        Shade._ACTION_RAISE)
 
   def start_lower(self):
     """Starts lowering the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_LOWER)
+        Shade._ACTION_LOWER)
 
   def stop(self):
     """Starts raising the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Output._ACTION_STOP)
+        Shade._ACTION_STOP)
 
 
 class KeypadComponent(LutronEntity):
@@ -1079,17 +1079,17 @@ class Keypad(LutronEntity):
 class PowerSource(Enum):
   """Enum values representing power source, reported by queries to
   battery-powered devices."""
-  
+
   # Values from ?HELP,?DEVICE,22
   UNKNOWN = 0
   BATTERY = 1
   EXTERNAL = 2
 
-  
+
 class BatteryStatus(Enum):
   """Enum values representing battery state, reported by queries to
   battery-powered devices."""
-  
+
   # Values from ?HELP,?DEVICE,22 don't match the documentation, using what's in the doc.
   #?HELP says:
   # <0-NOT BATTERY POWERED, 1-DEVICE_BATTERY_STATUS_UNKNOWN, 2-DEVICE_BATTERY_STATUS_GOOD, 3-DEVICE_BATTERY_STATUS_LOW, 4-DEVICE_STATUS_MIA>5-DEVICE_STATUS_NOT_ACTIVATED>
