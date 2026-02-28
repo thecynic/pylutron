@@ -57,7 +57,7 @@ class LutronConnection(threading.Thread):
   PW_PROMPT = b'password: '
   PROMPT = b'GNET> '
 
-  def __init__(self, host, user, password, recv_callback):
+  def __init__(self, host, user, password, recv_callback, connection_factory=telnetlib.Telnet):
     """Initializes the lutron connection, doesn't actually connect."""
     threading.Thread.__init__(self)
 
@@ -69,9 +69,10 @@ class LutronConnection(threading.Thread):
     self._lock = threading.Lock()
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
+    self._connection_factory = connection_factory
     self._done = False
 
-    self.setDaemon(True)
+    self.daemon = True
 
   def connect(self):
     """Connects to the lutron controller."""
@@ -110,7 +111,7 @@ class LutronConnection(threading.Thread):
   def _do_login_locked(self):
     """Executes the login procedure (telnet) as well as setting up some
     connection defaults like turning off the prompt, etc."""
-    self._telnet = telnetlib.Telnet(self._host, timeout=2)  # 2 second timeout
+    self._telnet = self._connection_factory(self._host, timeout=2)  # 2 second timeout
 
     # Ensure we know that connection goes away somewhat quickly
     try:
@@ -274,40 +275,44 @@ class LutronXmlDbParser(object):
                 name=area_name,
                 integration_id=int(area_xml.get('IntegrationID')),
                 occupancy_group=occupancy_group)
-    for output_xml in area_xml.find('Outputs'):
-      output = self._parse_output(output_xml)
-      area.add_output(output)
+    outputs = area_xml.find('Outputs')
+    if outputs is not None:
+      for output_xml in outputs:
+        output = self._parse_output(output_xml)
+        area.add_output(output)
     # device group in our case means keypad
     # device_group.get('Name') is the location of the keypad
-    for device_group in area_xml.find('DeviceGroups'):
-      if device_group.tag == 'DeviceGroup':
-        devs = device_group.find('Devices')
-      elif device_group.tag == 'Device':
-        devs = [device_group]
-      else:
-        _LOGGER.info("Unknown tag in DeviceGroups child %s" % devs)
-        devs = []
-      for device_xml in devs:
-        if device_xml.tag != 'Device':
-          continue
-        if device_xml.get('DeviceType') in (
-            'HWI_SEETOUCH_KEYPAD',
-            'SEETOUCH_KEYPAD',
-            'INTERNATIONAL_SEETOUCH_KEYPAD'
-            'SEETOUCH_TABLETOP_KEYPAD',
-            'PICO_KEYPAD',
-            'HYBRID_SEETOUCH_KEYPAD',
-            'MAIN_REPEATER',
-            'HOMEOWNER_KEYPAD',
-            'PALLADIOM_KEYPAD',
-            'HWI_SLIM',
-            'GRAFIK_T_HYBRID_KEYPAD'):
-          keypad = self._parse_keypad(device_xml, device_group)
-          area.add_keypad(keypad)
-        elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
-          motion_sensor = self._parse_motion_sensor(device_xml)
-          area.add_sensor(motion_sensor)
-        #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
+    device_groups = area_xml.find('DeviceGroups')
+    if device_groups is not None:
+      for device_group in device_groups:
+        if device_group.tag == 'DeviceGroup':
+          devs = device_group.find('Devices')
+        elif device_group.tag == 'Device':
+          devs = [device_group]
+        else:
+          _LOGGER.info("Unknown tag in DeviceGroups child %s" % device_group)
+          devs = []
+        for device_xml in devs:
+          if device_xml.tag != 'Device':
+            continue
+          if device_xml.get('DeviceType') in (
+              'HWI_SEETOUCH_KEYPAD',
+              'SEETOUCH_KEYPAD',
+              'INTERNATIONAL_SEETOUCH_KEYPAD'
+              'SEETOUCH_TABLETOP_KEYPAD',
+              'PICO_KEYPAD',
+              'HYBRID_SEETOUCH_KEYPAD',
+              'MAIN_REPEATER',
+              'HOMEOWNER_KEYPAD',
+              'PALLADIOM_KEYPAD',
+              'HWI_SLIM',
+              'GRAFIK_T_HYBRID_KEYPAD'):
+            keypad = self._parse_keypad(device_xml, device_group)
+            area.add_keypad(keypad)
+          elif device_xml.get('DeviceType') == 'MOTION_SENSOR':
+            motion_sensor = self._parse_motion_sensor(device_xml)
+            area.add_sensor(motion_sensor)
+          #elif device_xml.get('DeviceType') == 'VISOR_CONTROL_RECEIVER':
     return area
 
   def _parse_output(self, output_xml):
@@ -1268,7 +1273,7 @@ class OccupancyGroup(LutronEntity):
 
   def __repr__(self):
     """Returns a stringified representation of this object."""
-    return str({'area_name' : self.area.name,
+    return str({'area_name' : self._area.name,
                 'id' : self.id,
                 'state' : self.state})
 
