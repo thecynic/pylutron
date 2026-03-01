@@ -26,5 +26,6 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     install_requires=['telnetlib3'],
-    zip_safe=True,
+    package_data={'pylutron': ['py.typed']},
+    zip_safe=False,
 )
