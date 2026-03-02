@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import MagicMock, patch
 from pylutron import Lutron
@@ -27,7 +28,11 @@ class TestLutron(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import AsyncMock
         mock_writer = MagicMock()
         mock_writer.drain = AsyncMock()
-        mock_factory = AsyncMock(return_value=(AsyncMock(), mock_writer))
+        mock_reader = AsyncMock()
+        async def readuntil_mock(prompt):
+            return prompt
+        mock_reader.readuntil.side_effect = readuntil_mock
+        mock_factory = AsyncMock(return_value=(mock_reader, mock_writer))
         # Note: Lutron class currently does not expose connection_factory in __init__, so we might need to test LutronConnection directly
         # or modify Lutron.__init__ as well. For now, let's test LutronConnection directly.
         from pylutron import LutronConnection
@@ -37,7 +42,7 @@ class TestLutron(unittest.IsolatedAsyncioTestCase):
         # Accessing private method for test purpose
         await conn._do_login()
         
-        mock_factory.assert_called_with('host', 23, connect_timeout=5)
+        mock_factory.assert_called_with('host', 23, connect_timeout=5, encoding=None)
 
 if __name__ == '__main__':
     unittest.main()
