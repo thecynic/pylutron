@@ -14,7 +14,8 @@ import socket
 import threading
 import time
 
-from pylutron._telnetlib import telnetlib
+import asyncio
+import telnetlib3
 from typing import Any, Callable, Dict, Type
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,22 +58,22 @@ class LutronConnection(threading.Thread):
   PW_PROMPT = b'password: '
   PROMPT = b'GNET> '
 
-  def __init__(self, host, user, password, recv_callback, connection_factory=telnetlib.Telnet):
+  def __init__(self, host, user, password, recv_callback, connection_factory=telnetlib3.open_connection):
     """Initializes the lutron connection, doesn't actually connect."""
     threading.Thread.__init__(self)
 
     self._host = host
     self._user = user.encode('ascii')
     self._password = password.encode('ascii')
-    self._telnet = None
+    self._reader = None
+    self._writer = None
     self._connected = False
     self._lock = threading.Lock()
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
     self._connection_factory = connection_factory
     self._done = False
-
-    self.daemon = True
+    self._loop = asyncio.new_event_loop()
 
   def connect(self):
     """Connects to the lutron controller."""
@@ -85,112 +86,123 @@ class LutronConnection(threading.Thread):
     with self._lock:
       self._connect_cond.wait_for(lambda: self._connected)
 
-  def _send_locked(self, cmd):
-    """Sends the specified command to the lutron controller.
-
-    Assumes self._lock is held.
-    """
-    _LOGGER.debug("Sending: %s" % cmd)
-    try:
-      self._telnet.write(cmd.encode('ascii') + b'\r\n')
-    except _EXPECTED_NETWORK_EXCEPTIONS:
-      _LOGGER.exception("Error sending {}".format(cmd))
-      self._disconnect_locked()
-
   def send(self, cmd):
     """Sends the specified command to the lutron controller.
 
     Must not hold self._lock.
     """
+    _LOGGER.debug("Sending: %s" % cmd)
     with self._lock:
       if not self._connected:
         _LOGGER.debug("Ignoring send of '%s' because we are disconnected." % cmd)
         return
-      self._send_locked(cmd)
+      asyncio.run_coroutine_threadsafe(self._send_coro(cmd), self._loop)
 
-  def _do_login_locked(self):
+  async def _send_coro(self, cmd):
+    """Coroutine to send data and drain."""
+    if self._writer:
+      try:
+        if isinstance(cmd, str):
+          cmd = cmd.encode('ascii')
+        self._writer.write(cmd + b'\r\n')
+        await self._writer.drain()
+      except _EXPECTED_NETWORK_EXCEPTIONS:
+        _LOGGER.exception("Error sending {}".format(cmd))
+        with self._lock:
+          self._disconnect_locked()
+
+  async def _do_login(self):
     """Executes the login procedure (telnet) as well as setting up some
     connection defaults like turning off the prompt, etc."""
-    self._telnet = self._connection_factory(self._host, timeout=2)  # 2 second timeout
+    _LOGGER.info("Starting login to %s" % self._host)
+    self._reader, self._writer = await self._connection_factory(self._host, 23, connect_timeout=5, encoding=None)
 
     # Ensure we know that connection goes away somewhat quickly
     try:
-      sock = self._telnet.get_socket()
-      sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-      # Some operating systems may not include TCP_KEEPIDLE (macOS, variants of Windows)
-      if hasattr(socket, 'TCP_KEEPIDLE'):
-        # Send keepalive probes after 60 seconds of inactivity
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-      # Wait 10 seconds for an ACK
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-      # Send 3 probes before we give up
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+      sock = self._writer.get_extra_info('socket')
+      if sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        # Some operating systems may not include TCP_KEEPIDLE (macOS, variants of Windows)
+        if hasattr(socket, 'TCP_KEEPIDLE'):
+          # Send keepalive probes after 60 seconds of inactivity
+          sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+        # Wait 10 seconds for an ACK
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+        # Send 3 probes before we give up
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
     except OSError:
       _LOGGER.exception('error configuring socket')
 
-    self._telnet.read_until(LutronConnection.USER_PROMPT, timeout=3)
-    self._telnet.write(self._user + b'\r\n')
-    self._telnet.read_until(LutronConnection.PW_PROMPT, timeout=3)
-    self._telnet.write(self._password + b'\r\n')
-    self._telnet.read_until(LutronConnection.PROMPT, timeout=3)
+    await self._reader.readuntil(LutronConnection.USER_PROMPT)
+    self._writer.write(self._user + b'\r\n')
+    await self._reader.readuntil(LutronConnection.PW_PROMPT)
+    self._writer.write(self._password + b'\r\n')
+    
+    # If we get USER_PROMPT again, it means login failed
+    try:
+      res = await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=3.0)
+    except asyncio.TimeoutError:
+      _LOGGER.error("Timeout waiting for GNET prompt, checking if we are back at login")
+      # Check if we are back at login prompt (meaning failed login)
+      # This is a bit tricky with readuntil as it's blocking.
+      # But usually if password is wrong, it immediately sends 'login: ' again.
+      raise LutronException("Login failed (timeout or invalid credentials)")
 
-    self._send_locked("#MONITORING,12,2")
-    self._send_locked("#MONITORING,255,2")
-    self._send_locked("#MONITORING,3,1")
-    self._send_locked("#MONITORING,4,1")
-    self._send_locked("#MONITORING,5,1")
-    self._send_locked("#MONITORING,6,1")
-    self._send_locked("#MONITORING,8,1")
+    await self._send_coro("#MONITORING,12,2")
+    await self._send_coro("#MONITORING,255,2")
+    await self._send_coro("#MONITORING,3,1")
+    await self._send_coro("#MONITORING,4,1")
+    await self._send_coro("#MONITORING,5,1")
+    await self._send_coro("#MONITORING,6,1")
+    await self._send_coro("#MONITORING,8,1")
 
   def _disconnect_locked(self):
     """Closes the current connection. Assume self._lock is held."""
     was_connected = self._connected
     self._connected = False
     self._connect_cond.notify_all()
-    self._telnet = None
+    if self._writer:
+      self._writer.close()
+    self._writer = None
+    self._reader = None
     if was_connected:
       _LOGGER.warning("Disconnected")
 
-  def _maybe_reconnect(self):
-    """Reconnects to the controller if we have been previously disconnected."""
-    with self._lock:
-      if not self._connected:
-        _LOGGER.info("Connecting")
-        # This can throw an exception, but we'll catch it in run()
-        self._do_login_locked()
-        self._connected = True
-        self._connect_cond.notify_all()
-        _LOGGER.info("Connected")
-
-  def _main_loop(self):
+  async def _main_loop(self):
     """Main body of the the thread function.
 
     This will maintain connection and receive remote status updates.
     """
-    while True:
-      line = b''
+    while not self._done:
       try:
-        self._maybe_reconnect()
-        # If someone is sending a command, we can lose our connection so grab a
-        # copy beforehand. We don't need the lock because if the connection is
-        # open, we are the only ones that will read from telnet (the reconnect
-        # code runs synchronously in this loop).
-        t = self._telnet
-        if t is not None:
-          line = t.read_until(b"\n", timeout=3)
-        else:
-          raise EOFError('Telnet object already torn down')
+        await self._do_login()
+        with self._lock:
+          self._connected = True
+          self._connect_cond.notify_all()
+        _LOGGER.info("Connected")
+
+        while not self._done:
+          line = await self._reader.readline()
+          if not line:
+            _LOGGER.warning("Connection closed by remote")
+            break
+          self._recv_cb(line.decode('ascii').rstrip())
+      except LutronException:
+        _LOGGER.exception("Fatal error during login")
+        # For fatal errors like auth failure, we might want to stop or notify
+        # For now, let's stop the loop to avoid infinite spamming
+        self._done = True
       except _EXPECTED_NETWORK_EXCEPTIONS:
-        _LOGGER.exception("Uncaught exception")
-        try:
-          self._lock.acquire()
-          self._disconnect_locked()
-          # don't spam reconnect
-          time.sleep(1)
-          continue
-        finally:
-          self._lock.release()
-      self._recv_cb(line.decode('ascii').rstrip())
+        _LOGGER.exception("Network exception in main loop")
+      except Exception:
+        _LOGGER.exception("Uncaught exception in main loop")
+      
+      with self._lock:
+        self._disconnect_locked()
+      
+      if not self._done:
+        # don't spam reconnect
+        await asyncio.sleep(5)
 
   def run(self):
     """Main entry point into our receive thread.
@@ -198,10 +210,11 @@ class LutronConnection(threading.Thread):
     It just wraps _main_loop() so we can catch exceptions.
     """
     _LOGGER.info("Started")
+    asyncio.set_event_loop(self._loop)
     try:
-      self._main_loop()
+      self._loop.run_until_complete(self._main_loop())
     except Exception:
-      _LOGGER.exception("Uncaught exception")
+      _LOGGER.exception("Uncaught exception in run")
       raise
 
 
