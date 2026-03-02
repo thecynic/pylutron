@@ -112,7 +112,7 @@ class LutronConnection(threading.Thread):
         self._writer.write(cmd + b'\r\n')
         await self._writer.drain()
       except _EXPECTED_NETWORK_EXCEPTIONS:
-        _LOGGER.exception("Error sending {}".format(cmd))
+        _LOGGER.exception("Error sending {!r}".format(cmd))
         with self._lock:
           self._disconnect_locked()
 

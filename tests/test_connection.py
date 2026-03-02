@@ -4,14 +4,15 @@ import asyncio
 import threading
 import time
 from pylutron import LutronConnection
+from typing import List, Optional, Tuple, Any
 
 class AsyncTestBase(unittest.IsolatedAsyncioTestCase):
     pass
 
 class TestLutronConnection(AsyncTestBase):
-    async def test_connection_and_login(self):
-        received_lines = []
-        def recv_cb(line):
+    async def test_connection_and_login(self) -> None:
+        received_lines: List[str] = []
+        def recv_cb(line: str) -> None:
             received_lines.append(line)
 
         mock_reader = AsyncMock()
@@ -21,7 +22,7 @@ class TestLutronConnection(AsyncTestBase):
         mock_socket = MagicMock()
         mock_writer.get_extra_info.return_value = mock_socket
         
-        async def readuntil_mock(prompt):
+        async def readuntil_mock(prompt: bytes) -> bytes:
             if prompt == LutronConnection.PROMPT:
                 return b'GNET> '
             return prompt
@@ -32,7 +33,7 @@ class TestLutronConnection(AsyncTestBase):
             b"" # EOF
         ]
 
-        async def mock_connection_factory(host, port, connect_timeout=None, encoding=None):
+        async def mock_connection_factory(host: str, port: int, connect_timeout: Optional[float] = None, encoding: Optional[str] = None) -> Tuple[AsyncMock, MagicMock]:
             return mock_reader, mock_writer
 
         conn = LutronConnection('127.0.0.1', 'user', 'pass', recv_cb, connection_factory=mock_connection_factory)
@@ -50,10 +51,10 @@ class TestLutronConnection(AsyncTestBase):
         mock_writer.get_extra_info.assert_called_with('socket')
         mock_socket.setsockopt.assert_called()
 
-    def test_thread_start_and_connect(self):
+    def test_thread_start_and_connect(self) -> None:
         """Test that the thread starts and connect() waits for connection."""
-        received_lines = []
-        def recv_cb(line):
+        received_lines: List[str] = []
+        def recv_cb(line: str) -> None:
             received_lines.append(line)
 
         mock_reader = AsyncMock()
@@ -64,7 +65,7 @@ class TestLutronConnection(AsyncTestBase):
         mock_socket = MagicMock()
         mock_writer.get_extra_info.return_value = mock_socket
         
-        async def readuntil_mock(prompt):
+        async def readuntil_mock(prompt: bytes) -> bytes:
             if prompt == LutronConnection.PROMPT:
                 return b'GNET> '
             return prompt
@@ -73,7 +74,7 @@ class TestLutronConnection(AsyncTestBase):
         # Return a line then wait forever or return empty to close
         mock_reader.readline.side_effect = [b"~OUTPUT,1,1,100.0\r\n", b""]
 
-        async def mock_connection_factory(host, port, connect_timeout=None, encoding=None):
+        async def mock_connection_factory(host: str, port: int, connect_timeout: Optional[float] = None, encoding: Optional[str] = None) -> Tuple[AsyncMock, MagicMock]:
             return mock_reader, mock_writer
 
         conn = LutronConnection('127.0.0.1', 'user', 'pass', recv_cb, connection_factory=mock_connection_factory)
