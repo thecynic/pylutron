@@ -3,7 +3,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.mypy]
-files = "pylutron"
+files = ["pylutron", "tests"]
 python_version = "3.9"
 strict = true
 warn_return_any = true

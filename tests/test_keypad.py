@@ -2,36 +2,38 @@ import unittest
 from unittest.mock import MagicMock
 from pylutron import Lutron, Keypad, Button, Led
 
+from typing import cast
+
 class TestKeypad(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron("1.1.1.1", "user", "pass")
         # Mock the connection to avoid actual network calls
         self.lutron._conn = MagicMock()
         # Mock the register_id method to avoid errors during object creation if they try to register
-        self.lutron.register_id = MagicMock()
+        self.lutron.register_id = MagicMock() # type: ignore[method-assign]
         
         self.keypad = Keypad(self.lutron, "Main Keypad", "SEETOUCH_KEYPAD", "Hallway", 100, "uuid-100")
 
-    def test_button_press(self):
+    def test_button_press(self) -> None:
         button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "uuid-btn-1")
         self.keypad.add_button(button)
         
         # Verify that pressing the button sends the correct command
         button.press()
         # Command format: #DEVICE,integration_id,component_num,action
-        self.lutron._conn.send.assert_called_with('#DEVICE,100,1,3')
+        cast(MagicMock, self.lutron._conn.send).assert_called_with('#DEVICE,100,1,3')
         
-    def test_led_state_update(self):
+    def test_led_state_update(self) -> None:
         led = Led(self.lutron, self.keypad, "Led 1", 1, 81, "uuid-led-1")
         self.keypad.add_led(led)
         
         # Verify that setting the LED state sends the correct command
         led.state = True
-        self.lutron._conn.send.assert_called() 
-        args = self.lutron._conn.send.call_args[0][0]
+        cast(MagicMock, self.lutron._conn.send).assert_called() 
+        args = cast(MagicMock, self.lutron._conn.send).call_args[0][0]
         self.assertTrue(args.startswith("#DEVICE,100"))
         
-    def test_handle_update(self):
+    def test_handle_update(self) -> None:
         button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "uuid-btn-1")
         self.keypad.add_button(button)
         

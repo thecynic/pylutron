@@ -74,10 +74,10 @@ REAL_WORLD_XML = """<?xml version="1.0" encoding="UTF-8" ?>
 """
 
 class TestRealWorldXml(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
 
-    def test_parse_real_world_xml(self):
+    def test_parse_real_world_xml(self) -> None:
         parser = LutronXmlDbParser(self.lutron, REAL_WORLD_XML)
         self.assertTrue(parser.parse())
 
