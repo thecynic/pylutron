@@ -20,6 +20,6 @@ setup(
         'Topic :: Home Automation',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires=[],
+    install_requires=['telnetlib3'],
     zip_safe=True,
 )
