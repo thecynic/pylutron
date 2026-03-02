@@ -18,17 +18,21 @@ class TestLutronConnection(AsyncTestBase):
         mock_writer = MagicMock()
         mock_writer.write = MagicMock()
         mock_writer.drain = AsyncMock()
+        mock_socket = MagicMock()
+        mock_writer.get_extra_info.return_value = mock_socket
         
         async def readuntil_mock(prompt):
+            if prompt == LutronConnection.PROMPT:
+                return b'GNET> '
             return prompt
         
         mock_reader.readuntil.side_effect = readuntil_mock
         mock_reader.readline.side_effect = [
-            "~OUTPUT,1,1,100.0\r\n",
-            "" # EOF
+            b"~OUTPUT,1,1,100.0\r\n",
+            b"" # EOF
         ]
 
-        async def mock_connection_factory(host, port, connect_timeout=None):
+        async def mock_connection_factory(host, port, connect_timeout=None, encoding=None):
             return mock_reader, mock_writer
 
         conn = LutronConnection('127.0.0.1', 'user', 'pass', recv_cb, connection_factory=mock_connection_factory)
@@ -37,10 +41,14 @@ class TestLutronConnection(AsyncTestBase):
         await conn._do_login()
         
         # Check if login commands were sent
-        mock_writer.write.assert_any_call('user\r\n')
-        mock_writer.write.assert_any_call('pass\r\n')
+        mock_writer.write.assert_any_call(b'user\r\n')
+        mock_writer.write.assert_any_call(b'pass\r\n')
         # Monitoring commands
-        mock_writer.write.assert_any_call('#MONITORING,12,2\r\n')
+        mock_writer.write.assert_any_call(b'#MONITORING,12,2\r\n')
+        
+        # Check if socket options were set
+        mock_writer.get_extra_info.assert_called_with('socket')
+        mock_socket.setsockopt.assert_called()
 
     def test_thread_start_and_connect(self):
         """Test that the thread starts and connect() waits for connection."""
@@ -53,15 +61,19 @@ class TestLutronConnection(AsyncTestBase):
         mock_writer.write = MagicMock()
         mock_writer.drain = AsyncMock()
         mock_writer.close = MagicMock()
+        mock_socket = MagicMock()
+        mock_writer.get_extra_info.return_value = mock_socket
         
         async def readuntil_mock(prompt):
+            if prompt == LutronConnection.PROMPT:
+                return b'GNET> '
             return prompt
         
         mock_reader.readuntil.side_effect = readuntil_mock
         # Return a line then wait forever or return empty to close
-        mock_reader.readline.side_effect = ["~OUTPUT,1,1,100.0\r\n", ""]
+        mock_reader.readline.side_effect = [b"~OUTPUT,1,1,100.0\r\n", b""]
 
-        async def mock_connection_factory(host, port, connect_timeout=None):
+        async def mock_connection_factory(host, port, connect_timeout=None, encoding=None):
             return mock_reader, mock_writer
 
         conn = LutronConnection('127.0.0.1', 'user', 'pass', recv_cb, connection_factory=mock_connection_factory)

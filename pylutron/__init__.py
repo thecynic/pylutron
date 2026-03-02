@@ -54,17 +54,17 @@ class InvalidSubscription(LutronException):
 
 class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
-  USER_PROMPT = 'login: '
-  PW_PROMPT = 'password: '
-  PROMPT = 'GNET> '
+  USER_PROMPT = b'login: '
+  PW_PROMPT = b'password: '
+  PROMPT = b'GNET> '
 
   def __init__(self, host, user, password, recv_callback, connection_factory=telnetlib3.open_connection):
     """Initializes the lutron connection, doesn't actually connect."""
     threading.Thread.__init__(self)
 
     self._host = host
-    self._user = user
-    self._password = password
+    self._user = user.encode('ascii')
+    self._password = password.encode('ascii')
     self._reader = None
     self._writer = None
     self._connected = False
@@ -102,7 +102,9 @@ class LutronConnection(threading.Thread):
     """Coroutine to send data and drain."""
     if self._writer:
       try:
-        self._writer.write(cmd + '\r\n')
+        if isinstance(cmd, str):
+          cmd = cmd.encode('ascii')
+        self._writer.write(cmd + b'\r\n')
         await self._writer.drain()
       except _EXPECTED_NETWORK_EXCEPTIONS:
         _LOGGER.exception("Error sending {}".format(cmd))
@@ -113,13 +115,38 @@ class LutronConnection(threading.Thread):
     """Executes the login procedure (telnet) as well as setting up some
     connection defaults like turning off the prompt, etc."""
     _LOGGER.info("Starting login to %s" % self._host)
-    self._reader, self._writer = await self._connection_factory(self._host, 23, connect_timeout=5)
+    self._reader, self._writer = await self._connection_factory(self._host, 23, connect_timeout=5, encoding=None)
+
+    # Ensure we know that connection goes away somewhat quickly
+    try:
+      sock = self._writer.get_extra_info('socket')
+      if sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        # Some operating systems may not include TCP_KEEPIDLE (macOS, variants of Windows)
+        if hasattr(socket, 'TCP_KEEPIDLE'):
+          # Send keepalive probes after 60 seconds of inactivity
+          sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+        # Wait 10 seconds for an ACK
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+        # Send 3 probes before we give up
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+    except OSError:
+      _LOGGER.exception('error configuring socket')
 
     await self._reader.readuntil(LutronConnection.USER_PROMPT)
-    self._writer.write(self._user + '\r\n')
+    self._writer.write(self._user + b'\r\n')
     await self._reader.readuntil(LutronConnection.PW_PROMPT)
-    self._writer.write(self._password + '\r\n')
-    await self._reader.readuntil(LutronConnection.PROMPT)
+    self._writer.write(self._password + b'\r\n')
+    
+    # If we get USER_PROMPT again, it means login failed
+    try:
+      res = await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=3.0)
+    except asyncio.TimeoutError:
+      _LOGGER.error("Timeout waiting for GNET prompt, checking if we are back at login")
+      # Check if we are back at login prompt (meaning failed login)
+      # This is a bit tricky with readuntil as it's blocking.
+      # But usually if password is wrong, it immediately sends 'login: ' again.
+      raise LutronException("Login failed (timeout or invalid credentials)")
 
     await self._send_coro("#MONITORING,12,2")
     await self._send_coro("#MONITORING,255,2")
@@ -159,7 +186,12 @@ class LutronConnection(threading.Thread):
           if not line:
             _LOGGER.warning("Connection closed by remote")
             break
-          self._recv_cb(line.rstrip())
+          self._recv_cb(line.decode('ascii').rstrip())
+      except LutronException:
+        _LOGGER.exception("Fatal error during login")
+        # For fatal errors like auth failure, we might want to stop or notify
+        # For now, let's stop the loop to avoid infinite spamming
+        self._done = True
       except _EXPECTED_NETWORK_EXCEPTIONS:
         _LOGGER.exception("Network exception in main loop")
       except Exception:
@@ -167,8 +199,10 @@ class LutronConnection(threading.Thread):
       
       with self._lock:
         self._disconnect_locked()
-      # don't spam reconnect
-      await asyncio.sleep(5)
+      
+      if not self._done:
+        # don't spam reconnect
+        await asyncio.sleep(5)
 
   def run(self):
     """Main entry point into our receive thread.
