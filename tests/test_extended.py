@@ -138,6 +138,8 @@ class TestExtendedCoverage(unittest.TestCase):
         
         # Mock handle_update to set values
         # args: _, action, _, power, battery, _
+        # power: 1 -> BATTERY
+        # battery: 2 -> LOW (original enum values restored: NORMAL=1, LOW=2, OTHER=3)
         sensor.handle_update(['DEVICE', '22', '1', '1', '2', '0']) 
         
         self.assertEqual(sensor.power_source, PowerSource.BATTERY)

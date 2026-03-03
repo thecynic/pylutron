@@ -456,12 +456,12 @@ class Lutron(object):
     self._host = host
     self._user = user
     self._password = password
-    self._name: Optional[str] = None
+    self._name = ""
     self._conn = LutronConnection(host, user, password, self._recv)
     self._ids: Dict[str, Dict[int, LutronEntity]] = {}
     self._legacy_subscribers: Dict[LutronEntity, Callable[[LutronEntity], None]] = {}
     self._areas: List[Area] = []
-    self._guid: Optional[str] = None
+    self._guid = ""
 
   @property
   def areas(self) -> List[Area]:
@@ -472,11 +472,11 @@ class Lutron(object):
     self._guid = guid
 
   @property
-  def guid(self) -> Optional[str]:
+  def guid(self) -> str:
     return self._guid
 
   @property
-  def name(self) -> Optional[str]:
+  def name(self) -> str:
     return self._name
 
   def subscribe(self, obj: LutronEntity, handler: Callable[[LutronEntity], None]) -> None:
@@ -573,7 +573,7 @@ class Lutron(object):
     parser = LutronXmlDbParser(lutron=self, xml_db_str=xml_db)
     assert(parser.parse())     # throw our own exception
     self._areas = parser.areas
-    self._name = parser.project_name
+    self._name = parser.project_name or ""
 
     _LOGGER.info('Found Lutron project: %s, %d areas' % (
         self._name, len(self.areas)))
@@ -1122,6 +1122,7 @@ class PowerSource(Enum):
   battery-powered devices."""
 
   # Values from ?HELP,?DEVICE,22
+  UNINITIALIZED = -1
   UNKNOWN = 0
   BATTERY = 1
   EXTERNAL = 2
@@ -1134,6 +1135,7 @@ class BatteryStatus(Enum):
   # Values from ?HELP,?DEVICE,22 don't match the documentation, using what's in the doc.
   #?HELP says:
   # <0-NOT BATTERY POWERED, 1-DEVICE_BATTERY_STATUS_UNKNOWN, 2-DEVICE_BATTERY_STATUS_GOOD, 3-DEVICE_BATTERY_STATUS_LOW, 4-DEVICE_STATUS_MIA>5-DEVICE_STATUS_NOT_ACTIVATED>
+  UNINITIALIZED = -1
   NORMAL = 1
   LOW = 2
   OTHER = 3  # not sure what this value means
@@ -1165,8 +1167,8 @@ class MotionSensor(LutronEntity):
     """Initializes the motion sensor object."""
     super(MotionSensor, self).__init__(lutron, name, uuid)
     self._integration_id = integration_id
-    self._battery: Optional[BatteryStatus] = None
-    self._power: Optional[PowerSource] = None
+    self._battery = BatteryStatus.UNINITIALIZED
+    self._power = PowerSource.UNINITIALIZED
     self._lutron.register_id(MotionSensor._CMD_TYPE, self)
     self._query_waiters = _RequestHelper()
     self._last_update: Optional[float] = None
@@ -1200,7 +1202,7 @@ class MotionSensor(LutronEntity):
       return time.time() - self._last_update
 
   @property
-  def battery_status(self) -> Optional[BatteryStatus]:
+  def battery_status(self) -> BatteryStatus:
     """Returns the current BatteryStatus."""
     # Battery status won't change frequently but can't be retrieved for MONITORING.
     # So rate limit queries to once an hour.
@@ -1210,7 +1212,7 @@ class MotionSensor(LutronEntity):
     return self._battery
 
   @property
-  def power_source(self) -> Optional[PowerSource]:
+  def power_source(self) -> PowerSource:
     """Returns the current PowerSource."""
     self.battery_status  # retrieved by the same query
     return self._power
@@ -1247,6 +1249,7 @@ class OccupancyGroup(LutronEntity):
 
   class State(Enum):
     """Possible states of an OccupancyGroup."""
+    UNINITIALIZED = -1
     OCCUPIED = 3
     VACANT = 4
     UNKNOWN = 255
@@ -1264,7 +1267,7 @@ class OccupancyGroup(LutronEntity):
     self._area: Optional[Area] = None
     self._group_number = group_number
     self._integration_id: Optional[int] = None
-    self._state: Optional[OccupancyGroup.State] = None
+    self._state = OccupancyGroup.State.UNINITIALIZED
     self._query_waiters = _RequestHelper()
 
   def _bind_area(self, area: Area) -> None:
@@ -1295,10 +1298,10 @@ class OccupancyGroup(LutronEntity):
     return 'Occ {}'.format(self._area.name)
 
   @property
-  def state(self) -> Optional[OccupancyGroup.State]:
+  def state(self) -> OccupancyGroup.State:
     """Returns the current occupancy state."""
     # Poll for the first request.
-    if self._state == None:
+    if self._state == OccupancyGroup.State.UNINITIALIZED:
       ev = self._query_waiters.request(self._do_query_state)
       ev.wait(1.0)
     return self._state
@@ -1307,7 +1310,7 @@ class OccupancyGroup(LutronEntity):
     """Returns a pretty-printed string for this object."""
     assert self._area is not None
     return 'OccupancyGroup for Area "{}" Id: {} State: {}'.format(
-        self._area.name, self.id, self.state.name if self.state else "None")
+        self._area.name, self.id, self.state.name)
 
   def __repr__(self) -> str:
     """Returns a stringified representation of this object."""
@@ -1342,12 +1345,13 @@ class Area(object):
     self._lutron = lutron
     self._name = name
     self._integration_id = integration_id
+    if occupancy_group is None:
+      occupancy_group = OccupancyGroup(lutron, "", "")
     self._occupancy_group = occupancy_group
     self._outputs: List[Output] = []
     self._keypads: List[Keypad] = []
     self._sensors: List[MotionSensor] = []
-    if occupancy_group:
-      occupancy_group._bind_area(self)
+    self._occupancy_group._bind_area(self)
 
   def add_output(self, output: Output) -> None:
     """Adds an output object that's part of this area, only used during
@@ -1375,8 +1379,8 @@ class Area(object):
     return self._integration_id
 
   @property
-  def occupancy_group(self) -> Optional[OccupancyGroup]:
-    """Returns the OccupancyGroup for this area, or None."""
+  def occupancy_group(self) -> OccupancyGroup:
+    """Returns the OccupancyGroup for this area."""
     return self._occupancy_group
 
   @property

@@ -49,7 +49,7 @@ class TestFinalCoverage(unittest.TestCase):
     def test_lutron_properties(self) -> None:
         self.lutron.set_guid("NEW-GUID")
         self.assertEqual(self.lutron.guid, "NEW-GUID")
-        self.assertIsNone(self.lutron.name)
+        self.assertEqual(self.lutron.name, "")
         self.assertEqual(len(self.lutron.areas), 0)
 
     @patch('urllib.request.urlopen')
