@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 from pylutron import Lutron, LutronXmlDbParser
 
 class TestParserEdgeCases(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
 
-    def test_unknown_device_type(self):
+    def test_unknown_device_type(self) -> None:
         xml = """
         <Lutron>
             <GUID>GUID</GUID>
@@ -33,7 +33,7 @@ class TestParserEdgeCases(unittest.TestCase):
         # The alien device should be ignored, so no keypads in the area
         self.assertEqual(len(parser.areas[0].keypads), 0)
 
-    def test_device_defined_directly_in_group_tag(self):
+    def test_device_defined_directly_in_group_tag(self) -> None:
         # Coverage for: elif device_group.tag == 'Device': devs = [device_group]
         xml = """
         <Lutron>
@@ -59,7 +59,7 @@ class TestParserEdgeCases(unittest.TestCase):
         self.assertEqual(len(parser.areas[0].keypads), 1)
         self.assertEqual(parser.areas[0].keypads[0].name, "DirectKeypad")
 
-    def test_missing_occupancy_group(self):
+    def test_missing_occupancy_group(self) -> None:
         # Coverage for: if not occupancy_group: _LOGGER.warning...
         xml = """
         <Lutron>
@@ -81,7 +81,7 @@ class TestParserEdgeCases(unittest.TestCase):
         # occupancy_group should be None
         self.assertIsNone(area.occupancy_group)
 
-    def test_keypad_components_edge_cases(self):
+    def test_keypad_components_edge_cases(self) -> None:
         # Coverage for: unknown component type, no components
         xml = """
         <Lutron>
@@ -121,7 +121,7 @@ class TestParserEdgeCases(unittest.TestCase):
         # Should have 1 button, ignoring the others
         self.assertEqual(len(keypad.buttons), 1)
 
-    def test_button_with_no_name(self):
+    def test_button_with_no_name(self) -> None:
         # Coverage for: if not name: name = "Unknown Button"
         xml = """
         <Lutron>
@@ -156,7 +156,7 @@ class TestParserEdgeCases(unittest.TestCase):
         button = parser.areas[0].keypads[0].buttons[0]
         self.assertEqual(button.name, "Unknown Button")
 
-    def test_unknown_device_group_child_tag(self):
+    def test_unknown_device_group_child_tag(self) -> None:
         # Coverage for: else: _LOGGER.info("Unknown tag in DeviceGroups child %s" % devs)
         xml = """
         <Lutron>

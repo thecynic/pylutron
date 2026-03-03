@@ -36,10 +36,10 @@ MINIMAL_XML = """
 """
 
 class TestLutronXmlDbParser(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
 
-    def test_parse_simple_xml(self):
+    def test_parse_simple_xml(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MINIMAL_XML)
         self.assertTrue(parser.parse())
         
@@ -55,7 +55,7 @@ class TestLutronXmlDbParser(unittest.TestCase):
         self.assertEqual(area.name, 'Living Room')
         self.assertEqual(area.id, 1)
 
-    def test_parse_outputs(self):
+    def test_parse_outputs(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MINIMAL_XML)
         parser.parse()
         area = parser.areas[0]
@@ -67,7 +67,7 @@ class TestLutronXmlDbParser(unittest.TestCase):
         self.assertEqual(output.type, 'NON_DIM')
         self.assertEqual(output.id, 2)
 
-    def test_parse_keypad(self):
+    def test_parse_keypad(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MINIMAL_XML)
         parser.parse()
         area = parser.areas[0]

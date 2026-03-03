@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, patch, mock_open
 from pylutron import Lutron, Output, Keypad, Button, Led, Shade, OccupancyGroup, MotionSensor
 
 class TestFinalCoverage(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
         self.lutron._conn = MagicMock()
 
-    def test_string_representations(self):
+    def test_string_representations(self) -> None:
         # Output
         output = Output(self.lutron, "Light", 100, "DIMMER", 10, "uuid-1")
         self.assertIn("Light", str(output))
@@ -46,7 +46,7 @@ class TestFinalCoverage(unittest.TestCase):
         self.assertEqual(occ.name, "Occ Room")
         self.assertIn("area_name", repr(occ))
 
-    def test_lutron_properties(self):
+    def test_lutron_properties(self) -> None:
         self.lutron.set_guid("NEW-GUID")
         self.assertEqual(self.lutron.guid, "NEW-GUID")
         self.assertIsNone(self.lutron.name)
@@ -54,7 +54,7 @@ class TestFinalCoverage(unittest.TestCase):
 
     @patch('urllib.request.urlopen')
     @patch('builtins.open', new_callable=mock_open, read_data=b'<Project><GUID>G</GUID><OccupancyGroups/><Areas><Area Name="P" IntegrationID="0"><Areas/></Area></Areas></Project>')
-    def test_load_xml_db_from_cache(self, mock_file, mock_url):
+    def test_load_xml_db_from_cache(self, mock_file: MagicMock, mock_url: MagicMock) -> None:
         # Test loading from cache
         # Use a fresh Lutron object to avoid ID registration issues
         lutron = Lutron('localhost', 'user', 'pass')
@@ -64,7 +64,7 @@ class TestFinalCoverage(unittest.TestCase):
         self.assertEqual(lutron.guid, 'G')
 
     @patch('urllib.request.urlopen')
-    def test_load_xml_db_from_repeater(self, mock_url):
+    def test_load_xml_db_from_repeater(self, mock_url: MagicMock) -> None:
         # Mock urlopen return value
         mock_response = MagicMock()
         mock_response.read.return_value = b'<Project><GUID>R</GUID><OccupancyGroups/><Areas><Area Name="P" IntegrationID="0"><Areas/></Area></Areas></Project>'
@@ -78,7 +78,7 @@ class TestFinalCoverage(unittest.TestCase):
         mock_url.assert_called()
         self.assertEqual(lutron.guid, 'R')
 
-    def test_output_is_dimmable_edge_cases(self):
+    def test_output_is_dimmable_edge_cases(self) -> None:
         # Test various non-dimmable types
         non_dim_types = ['NON_DIM', 'NON_DIM_INC', 'NON_DIM_ELV', 'EXHAUST_FAN_TYPE', 'RELAY_LIGHTING', 'SWITCHED_MOTOR', 'CCO_SOMETHING']
         for i, t in enumerate(non_dim_types):

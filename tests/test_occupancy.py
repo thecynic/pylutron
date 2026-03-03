@@ -2,15 +2,17 @@ import unittest
 from unittest.mock import MagicMock
 from pylutron import Lutron, OccupancyGroup, MotionSensor
 
+from typing import cast
+
 class TestOccupancy(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron("1.1.1.1", "user", "pass")
         self.lutron._conn = MagicMock()
-        self.lutron.register_id = MagicMock()
+        self.lutron.register_id = MagicMock() # type: ignore[method-assign]
 
-    def test_occupancy_group_state(self):
+    def test_occupancy_group_state(self) -> None:
         # Occupancy Group 100
-        occ_group = OccupancyGroup(self.lutron, 100, "uuid-occ")
+        occ_group = OccupancyGroup(self.lutron, "100", "uuid-occ")
         
         # Test handle_update for occupancy change
         # Action is 3 (_ACTION_STATE)
@@ -24,19 +26,19 @@ class TestOccupancy(unittest.TestCase):
         occ_group.handle_update(['3', '4'])
         self.assertEqual(occ_group.state, OccupancyGroup.State.VACANT)
         
-    def test_motion_sensor_battery(self):
+    def test_motion_sensor_battery(self) -> None:
         sensor = MotionSensor(self.lutron, "Sensor 1", 500, "uuid-sensor")
         
         # MotionSensor battery query
         sensor._do_query_battery()
         
         # Verify that the query command is sent correctly
-        self.assertEqual(self.lutron._conn.send.call_count, 1)
-        args = self.lutron._conn.send.call_args[0][0]
+        self.assertEqual(cast(MagicMock, self.lutron._conn.send).call_count, 1)
+        args = cast(MagicMock, self.lutron._conn.send).call_args[0][0]
         self.assertTrue(args.startswith('?DEVICE,500'))
 
-    def test_occupancy_event(self):
-        occ_group = OccupancyGroup(self.lutron, 100, "uuid-occ")
+    def test_occupancy_event(self) -> None:
+        occ_group = OccupancyGroup(self.lutron, "100", "uuid-occ")
         handler = MagicMock()
         occ_group.subscribe(handler, None)
         

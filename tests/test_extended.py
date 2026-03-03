@@ -50,12 +50,14 @@ LEGACY_AND_COMPLEX_XML = """<?xml version="1.0" encoding="UTF-8" ?>
 </Project>
 """
 
+from typing import Any, cast
+
 class TestExtendedCoverage(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
         self.lutron._conn = MagicMock()
 
-    def test_legacy_subscription(self):
+    def test_legacy_subscription(self) -> None:
         """Test #5: Legacy Lutron.subscribe (deprecated)"""
         # Create a dummy entity
         entity = LutronEntity(self.lutron, "Test Entity", "uuid-1")
@@ -66,12 +68,12 @@ class TestExtendedCoverage(unittest.TestCase):
         
         # Simulate an event dispatch from the entity
         # The legacy dispatcher in Lutron class handles this
-        entity._dispatch_event(None, {})
+        entity._dispatch_event(cast(Any, None), {})
         
         self.assertTrue(handler.called)
         self.assertEqual(handler.call_args[0][0], entity)
 
-    def test_palladiom_keypad_parsing(self):
+    def test_palladiom_keypad_parsing(self) -> None:
         """Test #2: Specific Keypad Types (PALLADIOM_KEYPAD)"""
         parser = LutronXmlDbParser(self.lutron, LEGACY_AND_COMPLEX_XML)
         parser.parse()
@@ -81,7 +83,7 @@ class TestExtendedCoverage(unittest.TestCase):
         self.assertEqual(keypad.type, "PALLADIOM_KEYPAD")
         self.assertEqual(len(keypad.buttons), 1)
 
-    def test_pico_raise_lower_naming(self):
+    def test_pico_raise_lower_naming(self) -> None:
         """Test #3: Naming logic for Raise/Lower buttons"""
         parser = LutronXmlDbParser(self.lutron, LEGACY_AND_COMPLEX_XML)
         parser.parse()
@@ -92,7 +94,7 @@ class TestExtendedCoverage(unittest.TestCase):
         btn = pico.buttons[0]
         self.assertEqual(btn.name, "Dimmer Raise")
 
-    def test_request_helper_logic(self):
+    def test_request_helper_logic(self) -> None:
         """Coverage for _RequestHelper concurrency logic"""
         from pylutron import _RequestHelper
         helper = _RequestHelper()
@@ -110,26 +112,26 @@ class TestExtendedCoverage(unittest.TestCase):
         self.assertTrue(ev1.is_set())
         self.assertTrue(ev2.is_set())
 
-    def test_shade_commands(self):
+    def test_shade_commands(self) -> None:
         from pylutron import Shade
         shade = Shade(self.lutron, "Main Shade", 0, "SYSTEM_SHADE", 50, "uuid-shade")
         
         shade.start_raise()
-        self.lutron._conn.send.assert_called_with("#OUTPUT,50,2")
+        cast(MagicMock, self.lutron._conn.send).assert_called_with("#OUTPUT,50,2")
         
         shade.start_lower()
-        self.lutron._conn.send.assert_called_with("#OUTPUT,50,3")
+        cast(MagicMock, self.lutron._conn.send).assert_called_with("#OUTPUT,50,3")
         
         shade.stop()
-        self.lutron._conn.send.assert_called_with("#OUTPUT,50,4")
+        cast(MagicMock, self.lutron._conn.send).assert_called_with("#OUTPUT,50,4")
 
-    def test_output_flash(self):
+    def test_output_flash(self) -> None:
         from pylutron import Output
         output = Output(self.lutron, "Light", 100, "DIMMER", 10, "uuid-light")
         output.flash()
-        self.lutron._conn.send.assert_called_with("#OUTPUT,10,5")
+        cast(MagicMock, self.lutron._conn.send).assert_called_with("#OUTPUT,10,5")
 
-    def test_motion_sensor_battery_status(self):
+    def test_motion_sensor_battery_status(self) -> None:
         from pylutron import MotionSensor, PowerSource, BatteryStatus
         import time
         sensor = MotionSensor(self.lutron, "Sensor", 500, "uuid-sensor")
@@ -147,7 +149,7 @@ class TestExtendedCoverage(unittest.TestCase):
         self.assertIn("Sensor", str(sensor))
         self.assertIn("battery", repr(sensor))
 
-    def test_integration_id_exists_error(self):
+    def test_integration_id_exists_error(self) -> None:
         from pylutron import IntegrationIdExistsError, Output
         output = Output(self.lutron, "Light", 100, "DIMMER", 10, "uuid-light")
         # Registering the same ID again should raise
