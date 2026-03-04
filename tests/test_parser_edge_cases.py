@@ -78,8 +78,10 @@ class TestParserEdgeCases(unittest.TestCase):
         # Should not raise
         self.assertTrue(parser.parse())
         area = parser.areas[0]
-        # occupancy_group should be None
-        self.assertIsNone(area.occupancy_group)
+        # occupancy_group should be a dummy object with UNINITIALIZED state
+        from pylutron import OccupancyGroup
+        self.assertEqual(area.occupancy_group.state, OccupancyGroup.State.UNINITIALIZED)
+        self.assertEqual(area.occupancy_group.group_number, "")
 
     def test_keypad_components_edge_cases(self) -> None:
         # Coverage for: unknown component type, no components
