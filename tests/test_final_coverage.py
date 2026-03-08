@@ -31,7 +31,7 @@ class TestFinalCoverage(unittest.TestCase):
         led = Led(self.lutron, keypad, "LED", 1, 81, "uuid-4")
         self.assertIn("LED", str(led))
         self.assertIn("81", repr(led))
-        self.assertEqual(led.last_state, False)
+        self.assertEqual(led.last_state, Led.LED_OFF)
 
         # OccupancyGroup
         area = MagicMock()

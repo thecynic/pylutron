@@ -28,10 +28,11 @@ class TestKeypad(unittest.TestCase):
         self.keypad.add_led(led)
         
         # Verify that setting the LED state sends the correct command
-        led.state = True
+        led.state = Led.LED_ON
         cast(MagicMock, self.lutron._conn.send).assert_called() 
         args = cast(MagicMock, self.lutron._conn.send).call_args[0][0]
         self.assertTrue(args.startswith("#DEVICE,100"))
+        self.assertEqual(led.last_state, Led.LED_ON)
         
     def test_handle_update(self) -> None:
         button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "uuid-btn-1")
