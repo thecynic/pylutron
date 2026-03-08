@@ -993,7 +993,7 @@ class Led(KeypadComponent):
   def __init__(self, lutron: Lutron, keypad: Keypad, name: str, led_num: int, component_num: int, uuid: str) -> None:
     """Initializes the Keypad LED class."""
     super(Led, self).__init__(lutron, keypad, name, led_num, component_num, uuid)
-    self._state = 0
+    self._state = Led.LED_OFF
     self._query_waiters = _RequestHelper()
 
   def __str__(self) -> str:
