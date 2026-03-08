@@ -974,19 +974,26 @@ class Led(KeypadComponent):
   handle events for (led toggled by scenes)."""
   _ACTION_LED_STATE = 9
 
+  # LED indicators states
+  LED_OFF = 0
+  LED_ON = 1
+  LED_SLOW_FLASH = 2
+  LED_FAST_FLASH = 3
+
   class Event(LutronEvent):
     """Led events that can be generated.
 
-    STATE_CHANGED: The button has been pressed.
+    STATE_CHANGED: The LED state has changed.
         Params:
-          state: The boolean value of the new LED state.
+          state: The integer value of the new LED state.
+          0: Off, 1: On, 2: Slow Flash (1Hz), 3: Fast Flash (10Hz).
     """
     STATE_CHANGED = 1
 
   def __init__(self, lutron: Lutron, keypad: Keypad, name: str, led_num: int, component_num: int, uuid: str) -> None:
     """Initializes the Keypad LED class."""
     super(Led, self).__init__(lutron, keypad, name, led_num, component_num, uuid)
-    self._state = False
+    self._state = 0
     self._query_waiters = _RequestHelper()
 
   def __str__(self) -> str:
@@ -1005,26 +1012,28 @@ class Led(KeypadComponent):
             self.component_number, Led._ACTION_LED_STATE)
 
   @property
-  def last_state(self) -> bool:
+  def last_state(self) -> int:
     """Returns last cached value of the LED state, no query is performed."""
     return self._state
 
   @property
-  def state(self) -> bool:
+  def state(self) -> int:
     """Returns the current LED state by querying the remote controller."""
     ev = self._query_waiters.request(self._do_query_state)
     ev.wait(1.0)
     return self._state
 
   @state.setter
-  def state(self, new_state: bool) -> None:
+  def state(self, new_state: int) -> None:
     """Sets the new led state.
 
-    new_state: bool
+    new_state: int
     """
+    if new_state not in [Led.LED_OFF, Led.LED_ON, Led.LED_SLOW_FLASH, Led.LED_FAST_FLASH]:
+      raise ValueError("Invalid LED state: %s" % new_state)
     self._lutron.send(Lutron.OP_EXECUTE, Keypad._CMD_TYPE, self._keypad.id,
                       self.component_number, Led._ACTION_LED_STATE,
-                      int(new_state))
+                      new_state)
     self._state = new_state
 
   def handle_update(self, action: int, params: List[int]) -> bool: # type: ignore[override]
@@ -1039,7 +1048,7 @@ class Led(KeypadComponent):
       _LOGGER.debug("Unknown params %s (action %d on led %d in keypad %s)" % (
           params, action, self.number, self._keypad.name))
       return False
-    self._state = bool(params[0])
+    self._state = params[0]
     self._query_waiters.notify()
     self._dispatch_event(Led.Event.STATE_CHANGED, {'state': self._state})
     return True
