@@ -561,10 +561,18 @@ class Lutron(object):
         pass
     if not loaded_from:
       import urllib.request
+
       url = 'http://' + self._host + '/DbXmlInfo.xml'
-      with urllib.request.urlopen(url) as xmlfile:
-        xml_db = xmlfile.read()
-        loaded_from = 'repeater'
+      try:
+        with urllib.request.urlopen(url, timeout=30) as xmlfile:
+          xml_db = xmlfile.read()
+          loaded_from = 'repeater'
+      except urllib.error.URLError as ex:
+        raise ConnectionError(
+            "Unable to fetch Lutron XML database from %s. "
+            "Verify that the controller IP address '%s' is correct "
+            "and that the controller is reachable on port 80. "
+            "Original error: %s" % (url, self._host, ex)) from ex
 
     _LOGGER.info("Loaded xml db from %s" % loaded_from)
 
