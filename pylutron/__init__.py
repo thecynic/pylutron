@@ -39,6 +39,11 @@ class LutronException(Exception):
   pass
 
 
+class LutronLoginError(LutronException):
+  """Raised when login fails."""
+  pass
+
+
 class IntegrationIdExistsError(LutronException):
   """Asserted when there's an attempt to register a duplicate integration id."""
   pass
@@ -141,10 +146,19 @@ class LutronConnection(threading.Thread):
     assert self._reader is not None
     assert self._writer is not None
 
-    await asyncio.wait_for(self._reader.readuntil(LutronConnection.USER_PROMPT), timeout=5.0)
+    try:
+      await asyncio.wait_for(self._reader.readuntil(LutronConnection.USER_PROMPT), timeout=5.0)
+    except asyncio.TimeoutError:
+      raise LutronLoginError("Timed out waiting for login prompt ('login: ')")
+
     self._writer.write(self._user + b'\r\n')
     await self._writer.drain()
-    await asyncio.wait_for(self._reader.readuntil(LutronConnection.PW_PROMPT), timeout=5.0)
+
+    try:
+      await asyncio.wait_for(self._reader.readuntil(LutronConnection.PW_PROMPT), timeout=5.0)
+    except asyncio.TimeoutError:
+      raise LutronLoginError("Timed out waiting for password prompt ('password: ')")
+
     self._writer.write(self._password + b'\r\n')
     await self._writer.drain()
     
@@ -153,7 +167,7 @@ class LutronConnection(threading.Thread):
       await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=5.0)
     except asyncio.TimeoutError:
       _LOGGER.error("Timeout waiting for GNET prompt, checking if we are back at login")
-      raise LutronException("Login failed (timeout or invalid credentials)")
+      raise LutronLoginError("Timed out waiting for GNET prompt (check credentials)")
 
     await self._send_coro("#MONITORING,12,2")
     await self._send_coro("#MONITORING,255,2")
