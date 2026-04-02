@@ -44,6 +44,8 @@ class TestLutronConnection(AsyncTestBase):
         # Check if login commands were sent
         mock_writer.write.assert_any_call(b'user\r\n')
         mock_writer.write.assert_any_call(b'pass\r\n')
+        # Check if drain was called
+        self.assertEqual(mock_writer.drain.call_count, 9)
         # Monitoring commands
         mock_writer.write.assert_any_call(b'#MONITORING,12,2\r\n')
         

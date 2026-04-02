@@ -141,14 +141,16 @@ class LutronConnection(threading.Thread):
     assert self._reader is not None
     assert self._writer is not None
 
-    await self._reader.readuntil(LutronConnection.USER_PROMPT)
+    await asyncio.wait_for(self._reader.readuntil(LutronConnection.USER_PROMPT), timeout=5.0)
     self._writer.write(self._user + b'\r\n')
-    await self._reader.readuntil(LutronConnection.PW_PROMPT)
+    await self._writer.drain()
+    await asyncio.wait_for(self._reader.readuntil(LutronConnection.PW_PROMPT), timeout=5.0)
     self._writer.write(self._password + b'\r\n')
+    await self._writer.drain()
     
     # If we get USER_PROMPT again, it means login failed
     try:
-      await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=3.0)
+      await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=5.0)
     except asyncio.TimeoutError:
       _LOGGER.error("Timeout waiting for GNET prompt, checking if we are back at login")
       raise LutronException("Login failed (timeout or invalid credentials)")
