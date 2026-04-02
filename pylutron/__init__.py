@@ -16,6 +16,7 @@ import socket
 import threading
 import time
 from xml.etree import ElementTree as ET
+import re
 
 import asyncio
 import telnetlib3
@@ -64,7 +65,7 @@ class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
-  PROMPT = b'GNET> '
+  PROMPT_REGEX = re.compile(rb"[GQ]NET> ")
 
   def __init__(self, host: str, user: str, password: str, recv_callback: Callable[[str], None], connection_factory: Any = telnetlib3.open_connection) -> None:
     """Initializes the lutron connection, doesn't actually connect."""
@@ -164,7 +165,7 @@ class LutronConnection(threading.Thread):
     
     # If we get USER_PROMPT again, it means login failed
     try:
-      await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=5.0)
+      await asyncio.wait_for(self._reader.readuntil_pattern(LutronConnection.PROMPT_REGEX), timeout=5.0)
     except asyncio.TimeoutError:
       _LOGGER.error("Timeout waiting for GNET prompt, checking if we are back at login")
       raise LutronLoginError("Timed out waiting for GNET prompt (check credentials)")
