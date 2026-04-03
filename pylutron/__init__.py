@@ -12,6 +12,7 @@ __copyright__ = "Copyright 2016, Dima Zavin"
 from datetime import timedelta
 from enum import Enum
 import logging
+import re
 import socket
 import threading
 import time
@@ -65,7 +66,7 @@ class LutronConnection(threading.Thread):
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
   PROMPT = b'GNET> '
-  ANY_PROMPT = rb'[GQ]NET> '
+  ANY_PROMPT = re.compile(rb'[GQ]NET>')
 
   def __init__(self, host: str, user: str, password: str, recv_callback: Callable[[str], None], connection_factory: Any = telnetlib3.open_connection) -> None:
     """Initializes the lutron connection, doesn't actually connect."""
