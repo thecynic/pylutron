@@ -12,6 +12,7 @@ __copyright__ = "Copyright 2016, Dima Zavin"
 from datetime import timedelta
 from enum import Enum
 import logging
+import re
 import socket
 import threading
 import time
@@ -64,7 +65,7 @@ class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
-  PROMPT = b'GNET> '
+  PROMPT = re.compile(rb'[GQ]NET>')
 
   def __init__(self, host: str, user: str, password: str, recv_callback: Callable[[str], None], connection_factory: Any = telnetlib3.open_connection) -> None:
     """Initializes the lutron connection, doesn't actually connect."""
@@ -164,10 +165,10 @@ class LutronConnection(threading.Thread):
     
     # If we get USER_PROMPT again, it means login failed
     try:
-      await asyncio.wait_for(self._reader.readuntil(LutronConnection.PROMPT), timeout=5.0)
+      await asyncio.wait_for(self._reader.readuntil_pattern(LutronConnection.PROMPT), timeout=10.0)
     except asyncio.TimeoutError:
-      _LOGGER.error("Timeout waiting for GNET prompt, checking if we are back at login")
-      raise LutronLoginError("Timed out waiting for GNET prompt (check credentials)")
+      _LOGGER.error("Timeout waiting for GNET or QNET prompt, checking if we are back at login")
+      raise LutronLoginError("Timed out waiting for GNET/QNET prompt (check credentials)")
 
     await self._send_coro("#MONITORING,12,2")
     await self._send_coro("#MONITORING,255,2")
