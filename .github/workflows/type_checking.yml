@@ -3,14 +3,18 @@ name: Type Checking
 on:
   push:
     branches: [ master, type-checking ]
-  pull_request:
+  pull_request_target:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   mypy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        persist-credentials: false
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
