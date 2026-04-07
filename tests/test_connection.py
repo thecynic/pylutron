@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 import asyncio
 import threading
 import time
-from pylutron import LutronConnection, LutronLoginError
+from pylutron import LutronConnection, LutronLoginError, LutronConnectionError
 from typing import List, Optional, Tuple, Any
 
 class AsyncTestBase(unittest.IsolatedAsyncioTestCase):
@@ -109,6 +109,41 @@ class TestLutronConnection(AsyncTestBase):
         
         self.conn._done = True
         self.conn.join(timeout=1)
+
+    def test_connect_deadlock_on_login_failure(self) -> None:
+        """Test that connect() doesn't deadlock when login fails."""
+        with patch.object(LutronConnection, '_do_login', side_effect=LutronLoginError("Fatal login error")):
+            start_time = time.time()
+            with self.assertRaises(LutronLoginError):
+                self.conn.connect()
+            end_time = time.time()
+            self.assertLess(end_time - start_time, 5.0, "connect() took too long, possible deadlock")
+            self.conn.join(timeout=1)
+            self.assertFalse(self.conn.is_alive())
+
+    def test_connect_fail_on_network_error(self) -> None:
+        """Test that connect() fails if a network error occurs during initial connection."""
+        with patch.object(LutronConnection, '_do_login', side_effect=OSError("Network unreachable")):
+            start_time = time.time()
+            with self.assertRaises(LutronConnectionError):
+                self.conn.connect()
+            end_time = time.time()
+            self.assertLess(end_time - start_time, 5.0, "connect() took too long")
+            self.conn.join(timeout=1)
+            self.assertFalse(self.conn.is_alive())
+
+    def test_connect_success_wait(self) -> None:
+        """Test that connect() waits for a successful connection."""
+        async def mock_do_login_success():
+            # Set up reader to return empty line immediately after login
+            self.mock_reader.readline.return_value = b""
+            await asyncio.sleep(0.1)
+            
+        with patch.object(LutronConnection, '_do_login', side_effect=mock_do_login_success):
+            self.conn.connect()
+            self.assertTrue(self.conn._connected)
+            self.conn._done = True
+            self.conn.join(timeout=1)
 
 if __name__ == '__main__':
     unittest.main()

@@ -45,6 +45,11 @@ class LutronLoginError(LutronException):
   pass
 
 
+class LutronConnectionError(LutronException):
+  """Raised when connection to the controller fails."""
+  pass
+
+
 class IntegrationIdExistsError(LutronException):
   """Asserted when there's an attempt to register a duplicate integration id."""
   pass
@@ -83,6 +88,7 @@ class LutronConnection(threading.Thread):
     self._connection_factory = connection_factory
     self._done = False
     self._loop = asyncio.new_event_loop()
+    self._exception: Optional[LutronException] = None
 
     self.daemon = True
 
@@ -95,7 +101,11 @@ class LutronConnection(threading.Thread):
     # ensures that the caller only resumes when we are fully connected.
     self.start()
     with self._lock:
-      self._connect_cond.wait_for(lambda: self._connected)
+      self._connect_cond.wait_for(lambda: self._connected or self._done)
+      if not self._connected and self._done:
+        if self._exception:
+          raise self._exception
+        raise LutronConnectionError("Failed to connect to Lutron controller")
 
   def send(self, cmd: str) -> None:
     """Sends the specified command to the lutron controller.
@@ -210,15 +220,23 @@ class LutronConnection(threading.Thread):
             _LOGGER.warning("Connection closed by remote")
             break
           self._recv_cb(line.decode('ascii').rstrip())
-      except LutronException:
+      except LutronException as e:
         _LOGGER.exception("Fatal error during login")
         # For fatal errors like auth failure, we might want to stop or notify
         # For now, let's stop the loop to avoid infinite spamming
+        self._exception = e
         self._done = True
-      except _EXPECTED_NETWORK_EXCEPTIONS:
+      except _EXPECTED_NETWORK_EXCEPTIONS as e:
         _LOGGER.exception("Network exception in main loop")
-      except Exception:
+        # If we have not yet connected, don't try to reconnect
+        if not self._connected:
+          self._exception = LutronConnectionError(str(e))
+          self._done = True
+      except Exception as e:
         _LOGGER.exception("Uncaught exception in main loop")
+        if not self._connected:
+          self._exception = LutronException(str(e))
+          self._done = True
       
       with self._lock:
         self._disconnect_locked()

@@ -3,7 +3,13 @@ import argparse
 import logging
 import sys
 import time
+import os
+
+# Add the parent directory to sys.path so we can import pylutron
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from pylutron import Lutron
+from pylutron.debug import print_all_devices
 
 def main():
     parser = argparse.ArgumentParser(description='Test connection to Lutron repeater')
@@ -47,18 +53,13 @@ def main():
 
         print("\nTest summary:")
         print(f"GUID: {lutron.guid}")
-        for area in lutron.areas:
-            print(f"Area: {area.name} (ID: {area.id})")
-            for output in area.outputs:
-                print(f"  Output: {output.name} (ID: {output.id}, Level: {output.last_level()})")
-            for keypad in area.keypads:
-                print(f"  Keypad: {keypad.name} (ID: {keypad.id})")
+        print_all_devices(lutron.areas)
 
         print("\nConnection test successful!")
 
     except Exception as e:
         print(f"\nError: {e}")
-        logging.exception("Connection test failed")
+        # logging.exception("Connection test failed")
         sys.exit(1)
 
 if __name__ == '__main__':
