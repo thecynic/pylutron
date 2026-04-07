@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from pylutron import Lutron, LutronXmlDbParser
 from pylutron.debug import print_all_devices
 
-def debug_xml(xml_file):
+def debug_xml(xml_file: str) -> None:
     if not os.path.exists(xml_file):
         print(f"Error: File {xml_file} not found.")
         sys.exit(1)

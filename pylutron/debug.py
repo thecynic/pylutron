@@ -1,7 +1,7 @@
 from typing import Iterable
 from . import Area, Output, Keypad, MotionSensor
 
-def print_all_devices(areas: Iterable[Area]):
+def print_all_devices(areas: Iterable[Area]) -> None:
     """Prints all detected devices and their attributes from the given areas."""
     for area in areas:
         print(f"Area: {area.name} (Integration ID: {area.id})")

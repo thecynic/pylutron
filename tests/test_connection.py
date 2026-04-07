@@ -146,7 +146,7 @@ class TestLutronConnection(AsyncTestBase):
 
     def test_connect_success_wait(self) -> None:
         """Test that connect() waits for a successful connection."""
-        async def mock_do_login_success():
+        async def mock_do_login_success() -> None:
             # Set up reader to return empty line immediately after login
             self.mock_reader.readline.return_value = b""
             await asyncio.sleep(0.1)
