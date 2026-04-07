@@ -813,6 +813,9 @@ class Output(LutronEntity):
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, self._fade_time(fade_time_seconds))
     self._level = new_level
+    # Dispatch event immediately for controllers (e.g. HomeWorks QS/QNET)
+    # that don't echo state changes back on the same connection.
+    self._dispatch_event(Output.Event.LEVEL_CHANGED, {'level': self._level})
 
   def flash(self, fade_time_seconds: Optional[float] = None) -> None:
     """Flashes the zone until a new level is set."""
