@@ -4,6 +4,7 @@ import logging
 import sys
 import time
 import os
+import getpass
 
 # Add the parent directory to sys.path so we can import pylutron
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -14,8 +15,8 @@ from pylutron.debug import print_all_devices
 def main():
     parser = argparse.ArgumentParser(description='Test connection to Lutron repeater')
     parser.add_argument('--host', help='IP address of the Lutron repeater')
-    parser.add_argument('--user', help='Username (default: lutron)', default='lutron')
-    parser.add_argument('--password', help='Password (default: lutron)', default='lutron')
+    parser.add_argument('--user', help='Username')
+    parser.add_argument('--password', help='Password')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 
     args = parser.parse_args()
@@ -32,7 +33,7 @@ def main():
     if not user:
         user = input('Enter username [lutron]: ') or 'lutron'
     if not password:
-        password = input('Enter password [lutron]: ') or 'lutron'
+        password = getpass.getpass('Enter password [lutron]: ') or 'lutron'
 
     print(f"Connecting to {host} as {user}...")
     lutron = Lutron(host, user, password)

@@ -93,6 +93,18 @@ class TestLutronConnection(AsyncTestBase):
         
         self.assertIn("check credentials", str(cm.exception).lower())
 
+    async def test_incorrect_credentials_assertive(self) -> None:
+        """Test assertive reporting of incorrect credentials."""
+        self.mock_reader.readuntil.side_effect = [
+            LutronConnection.USER_PROMPT,
+            LutronConnection.PW_PROMPT
+        ]
+        # Simulate repeater sending back the login prompt on failure
+        self.mock_reader.readuntil_pattern.return_value = LutronConnection.USER_PROMPT
+        
+        with self.assertRaisesRegex(LutronLoginError, "Incorrect username or password"):
+            await self.conn._do_login()
+
     def test_thread_start_and_connect(self) -> None:
         """Test that the thread starts and connect() waits for connection."""
         # Use a function for side_effect so it doesn't exhaust if the loop retries

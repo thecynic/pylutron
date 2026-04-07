@@ -70,7 +70,7 @@ class LutronConnection(threading.Thread):
   """Encapsulates the connection to the Lutron controller."""
   USER_PROMPT = b'login: '
   PW_PROMPT = b'password: '
-  PROMPT = re.compile(rb'[GQ]NET>')
+  PROMPT = re.compile(rb'([GQ]NET>|login: )')
 
   def __init__(self, host: str, user: str, password: str, recv_callback: Callable[[str], None], connection_factory: Any = telnetlib3.open_connection) -> None:
     """Initializes the lutron connection, doesn't actually connect."""
@@ -175,7 +175,10 @@ class LutronConnection(threading.Thread):
     
     # If we get USER_PROMPT again, it means login failed
     try:
-      await asyncio.wait_for(self._reader.readuntil_pattern(LutronConnection.PROMPT), timeout=10.0)
+      # Wait for either the GNET/QNET prompt or the login prompt again
+      res = await asyncio.wait_for(self._reader.readuntil_pattern(LutronConnection.PROMPT), timeout=10.0)
+      if LutronConnection.USER_PROMPT in res:
+        raise LutronLoginError("Incorrect username or password")
     except asyncio.TimeoutError:
       _LOGGER.error("Timeout waiting for GNET or QNET prompt, checking if we are back at login")
       raise LutronLoginError("Timed out waiting for GNET/QNET prompt (check credentials)")
