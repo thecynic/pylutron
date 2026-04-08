@@ -1,5 +1,5 @@
 import unittest
-from pylutron import Lutron, LutronXmlDbParser
+from pylutron import Lutron, LutronXmlDbParser, MotorLoad
 
 # Minimal XML for testing
 MINIMAL_XML = """
@@ -28,6 +28,22 @@ MINIMAL_XML = """
                              </Devices>
                         </DeviceGroup>
                     </DeviceGroups>
+                </Area>
+            </Areas>
+        </Area>
+    </Areas>
+</Lutron>
+"""
+
+MOTOR_XML = """
+<Lutron>
+    <Areas>
+        <Area Name="Project">
+            <Areas>
+                <Area Name="Living Room" IntegrationID="1">
+                    <Outputs>
+                        <Output Name="Curtain Motor" IntegrationID="10" OutputType="MOTOR" Wattage="100" UUID="OUT-MOTOR-1" />
+                    </Outputs>
                 </Area>
             </Areas>
         </Area>
@@ -66,6 +82,15 @@ class TestLutronXmlDbParser(unittest.TestCase):
         self.assertEqual(output.watts, 100)
         self.assertEqual(output.type, 'NON_DIM')
         self.assertEqual(output.id, 2)
+
+    def test_parse_motor_output_as_motor_load(self) -> None:
+        parser = LutronXmlDbParser(self.lutron, MOTOR_XML)
+        parser.parse()
+        area = parser.areas[0]
+        self.assertEqual(len(area.outputs), 1)
+        output = area.outputs[0]
+        self.assertIsInstance(output, MotorLoad)
+        self.assertEqual(output.type, 'MOTOR')
 
     def test_parse_keypad(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MINIMAL_XML)
