@@ -389,8 +389,10 @@ class LutronXmlDbParser(object):
     integration_id = int(output_xml.get('IntegrationID') or 0)
     uuid = output_xml.get('UUID') or ""
 
-    if output_type in ('SYSTEM_SHADE', 'MOTOR'):
+    if output_type == 'SYSTEM_SHADE':
       return Shade(self._lutron, name, watts, output_type, integration_id, uuid)
+    if output_type == 'MOTOR':
+      return MotorLoad(self._lutron, name, watts, output_type, integration_id, uuid)
     return Output(self._lutron, name, watts, output_type, integration_id, uuid)
 
   def _parse_keypad(self, keypad_xml: ET.Element, device_group: ET.Element) -> Keypad:
@@ -883,6 +885,32 @@ class Shade(Output):
     """Starts raising the shade."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Shade._ACTION_STOP)
+
+
+class MotorLoad(Output):
+  """This is the output entity for binary motor loads (e.g. LQSE-4M)."""
+  _ACTION_OPEN = 2
+  _ACTION_CLOSE = 3
+  _ACTION_STOP = 4
+
+  def open(self) -> None:
+    """Starts opening the motor load."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        MotorLoad._ACTION_OPEN)
+
+  def close(self) -> None:
+    """Starts closing the motor load."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        MotorLoad._ACTION_CLOSE)
+
+  def stop(self) -> None:
+    """Stops motor movement."""
+    self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
+        MotorLoad._ACTION_STOP)
+
+  def set_level(self, new_level: float, fade_time_seconds: Optional[float] = None) -> None:
+    """Motor loads are binary and should only be controlled with open/close/stop."""
+    raise ValueError("Motor loads are binary. Use open(), close(), or stop().")
 
 
 class KeypadComponent(LutronEntity):
