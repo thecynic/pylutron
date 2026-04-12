@@ -13,7 +13,7 @@ class TestShade(unittest.TestCase):
 
     def test_shade_commands(self) -> None:
         # Create a shade (Output with type SYSTEM_SHADE or MOTOR)
-        shade = Shade(self.lutron, "Master Shade", 100, "SYSTEM_SHADE", 50, "uuid-shade")
+        shade = Shade(self.lutron, "Master Shade", 0, "SYSTEM_SHADE", 50, "2001")
         
         # Test start_raise
         shade.start_raise()

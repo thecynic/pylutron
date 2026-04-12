@@ -12,10 +12,10 @@ class TestKeypad(unittest.TestCase):
         # Mock the register_id method to avoid errors during object creation if they try to register
         self.lutron.register_id = MagicMock() # type: ignore[method-assign]
         
-        self.keypad = Keypad(self.lutron, "Main Keypad", "SEETOUCH_KEYPAD", "Hallway", 100, "uuid-100")
+        self.keypad = Keypad(self.lutron, "Main Keypad", "SEETOUCH_KEYPAD", "Hallway", 100, "800")
 
     def test_button_press(self) -> None:
-        button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "uuid-btn-1")
+        button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "801")
         self.keypad.add_button(button)
         
         # Verify that pressing the button sends the correct command
@@ -24,7 +24,7 @@ class TestKeypad(unittest.TestCase):
         cast(MagicMock, self.lutron._conn.send).assert_called_with('#DEVICE,100,1,3')
         
     def test_led_state_update(self) -> None:
-        led = Led(self.lutron, self.keypad, "Led 1", 1, 81, "uuid-led-1")
+        led = Led(self.lutron, self.keypad, "Led 1", 1, 81, "802")
         self.keypad.add_led(led)
         
         # Verify that setting the LED state sends the correct command
@@ -35,7 +35,7 @@ class TestKeypad(unittest.TestCase):
         self.assertEqual(led.last_state, Led.LED_ON)
         
     def test_handle_update(self) -> None:
-        button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "uuid-btn-1")
+        button = Button(self.lutron, self.keypad, "Btn 1", 1, "Toggle", "Press", "801")
         self.keypad.add_button(button)
         
         handler = MagicMock()

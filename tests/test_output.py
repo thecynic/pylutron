@@ -8,7 +8,7 @@ class TestOutput(unittest.TestCase):
     def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
         self.lutron._conn.send = MagicMock() # type: ignore[method-assign]
-        self.output = Output(self.lutron, "Ceiling Light", 100, "DIMMER", 1, "UUID-1")
+        self.output = Output(self.lutron, "Ceiling Light", 100, "DIMMER", 1, "601")
 
     def test_properties(self) -> None:
         self.assertEqual(self.output.name, "Ceiling Light")
@@ -21,7 +21,7 @@ class TestOutput(unittest.TestCase):
         self.assertTrue(self.output.is_dimmable)
         
         # NON_DIM should not be dimmable
-        non_dim = Output(self.lutron, "Fan", 100, "NON_DIM", 2, "UUID-2")
+        non_dim = Output(self.lutron, "Fan", 100, "NON_DIM", 2, "602")
         self.assertFalse(non_dim.is_dimmable)
 
     def test_set_level_executes_command(self) -> None:

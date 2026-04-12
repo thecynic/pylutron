@@ -10,9 +10,9 @@ class TestLed(unittest.TestCase):
         self.lutron._conn = MagicMock()
         self.lutron.register_id = MagicMock() # type: ignore[method-assign]
         # Create a mock keypad
-        self.keypad = Keypad(self.lutron, "Hallway Keypad", "SEETOUCH_KEYPAD", "Hallway", 100, "uuid-keypad")
+        self.keypad = Keypad(self.lutron, "Hallway Keypad", "SEETOUCH_KEYPAD", "Hallway", 100, "800")
         # Create an LED
-        self.led = Led(self.lutron, self.keypad, "Status LED", 1, 81, "uuid-led")
+        self.led = Led(self.lutron, self.keypad, "Status LED", 1, 81, "803")
         self.keypad.add_led(self.led)
 
     def test_initial_state(self) -> None:

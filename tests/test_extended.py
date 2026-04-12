@@ -17,7 +17,7 @@ LEGACY_AND_COMPLEX_XML = """<?xml version="1.0" encoding="UTF-8" ?>
                                 <Device Name="Master Keypad" UUID="7501" IntegrationID="34" DeviceType="PALLADIOM_KEYPAD">
                                     <Components>
                                         <Component ComponentNumber="1" ComponentType="BUTTON">
-                                            <Button Engraving="On" ButtonType="Toggle" UUID="B1" />
+                                            <Button Engraving="On" ButtonType="Toggle" UUID="7502" />
                                         </Component>
                                     </Components>
                                 </Device>
@@ -32,7 +32,7 @@ LEGACY_AND_COMPLEX_XML = """<?xml version="1.0" encoding="UTF-8" ?>
                                 <Device Name="Pico" UUID="9555" IntegrationID="28" DeviceType="PICO_KEYPAD">
                                     <Components>
                                         <Component ComponentNumber="5" ComponentType="BUTTON">
-                                            <Button Engraving="Raise" ButtonType="SingleSceneRaiseLower" Direction="Raise" UUID="B2" />
+                                            <Button Engraving="Raise" ButtonType="SingleSceneRaiseLower" Direction="Raise" UUID="9556" />
                                         </Component>
                                     </Components>
                                 </Device>
@@ -60,7 +60,7 @@ class TestExtendedCoverage(unittest.TestCase):
     def test_legacy_subscription(self) -> None:
         """Test #5: Legacy Lutron.subscribe (deprecated)"""
         # Create a dummy entity
-        entity = LutronEntity(self.lutron, "Test Entity", "uuid-1")
+        entity = LutronEntity(self.lutron, "Test Entity", "601")
         handler = MagicMock()
         
         # This should trigger a warning but function correctly
@@ -114,7 +114,7 @@ class TestExtendedCoverage(unittest.TestCase):
 
     def test_shade_commands(self) -> None:
         from pylutron import Shade
-        shade = Shade(self.lutron, "Main Shade", 0, "SYSTEM_SHADE", 50, "uuid-shade")
+        shade = Shade(self.lutron, "Main Shade", 0, "SYSTEM_SHADE", 50, "2001")
         
         shade.start_raise()
         cast(MagicMock, self.lutron._conn.send).assert_called_with("#OUTPUT,50,2")
@@ -127,14 +127,14 @@ class TestExtendedCoverage(unittest.TestCase):
 
     def test_output_flash(self) -> None:
         from pylutron import Output
-        output = Output(self.lutron, "Light", 100, "DIMMER", 10, "uuid-light")
+        output = Output(self.lutron, "Light", 100, "DIMMER", 10, "714")
         output.flash()
         cast(MagicMock, self.lutron._conn.send).assert_called_with("#OUTPUT,10,5")
 
     def test_motion_sensor_battery_status(self) -> None:
         from pylutron import MotionSensor, PowerSource, BatteryStatus
         import time
-        sensor = MotionSensor(self.lutron, "Sensor", 500, "uuid-sensor")
+        sensor = MotionSensor(self.lutron, "Sensor", 500, "900")
         
         # Mock handle_update to set values
         # args: _, action, _, power, battery, _
@@ -153,7 +153,7 @@ class TestExtendedCoverage(unittest.TestCase):
 
     def test_integration_id_exists_error(self) -> None:
         from pylutron import IntegrationIdExistsError, Output
-        output = Output(self.lutron, "Light", 100, "DIMMER", 10, "uuid-light")
+        output = Output(self.lutron, "Light", 100, "DIMMER", 10, "714")
         # Registering the same ID again should raise
         with self.assertRaises(IntegrationIdExistsError):
             self.lutron.register_id(Output._CMD_TYPE, output)

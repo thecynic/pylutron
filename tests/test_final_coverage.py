@@ -9,26 +9,26 @@ class TestFinalCoverage(unittest.TestCase):
 
     def test_string_representations(self) -> None:
         # Output
-        output = Output(self.lutron, "Light", 100, "DIMMER", 10, "uuid-1")
+        output = Output(self.lutron, "Light", 100, "DIMMER", 10, "601")
         self.assertIn("Light", str(output))
         self.assertIn("DIMMER", repr(output))
         self.assertEqual(output.legacy_uuid, "10-0")
 
         # Keypad
-        keypad = Keypad(self.lutron, "KP", "TYPE", "LOC", 20, "uuid-2")
+        keypad = Keypad(self.lutron, "KP", "TYPE", "LOC", 20, "602")
         self.assertIn("KP", keypad.name)
         self.assertEqual(keypad.type, "TYPE")
         self.assertEqual(keypad.location, "LOC")
         self.assertEqual(keypad.legacy_uuid, "20-0")
 
         # Button
-        button = Button(self.lutron, keypad, "Btn", 1, "T", "D", "uuid-3")
+        button = Button(self.lutron, keypad, "Btn", 1, "T", "D", "603")
         self.assertIn("Btn", str(button))
         self.assertIn("T", repr(button))
         self.assertEqual(button.button_type, "T")
 
         # LED
-        led = Led(self.lutron, keypad, "LED", 1, 81, "uuid-4")
+        led = Led(self.lutron, keypad, "LED", 1, 81, "604")
         self.assertIn("LED", str(led))
         self.assertIn("81", repr(led))
         self.assertEqual(led.last_state, Led.LED_OFF)
@@ -37,7 +37,7 @@ class TestFinalCoverage(unittest.TestCase):
         area = MagicMock()
         area.name = "Room"
         area.id = 5
-        occ = OccupancyGroup(self.lutron, "100", "uuid-5")
+        occ = OccupancyGroup(self.lutron, "100", "605")
         occ._bind_area(area)
         occ.handle_update(['3', '3']) # Set state to OCCUPIED
         self.assertIn("Room", str(occ))

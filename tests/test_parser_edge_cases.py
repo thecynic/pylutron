@@ -18,7 +18,7 @@ class TestParserEdgeCases(unittest.TestCase):
                             <DeviceGroups>
                                 <DeviceGroup Name="Loc">
                                     <Devices>
-                                        <Device Name="UnknownThing" DeviceType="ALIEN_TECH" IntegrationID="10" UUID="D1" />
+                                        <Device Name="UnknownThing" DeviceType="ALIEN_TECH" IntegrationID="10" UUID="5001" />
                                     </Devices>
                                 </DeviceGroup>
                             </DeviceGroups>
@@ -44,7 +44,7 @@ class TestParserEdgeCases(unittest.TestCase):
                     <Areas>
                         <Area Name="Room1" IntegrationID="1">
                             <DeviceGroups>
-                                <Device Name="DirectKeypad" DeviceType="SEETOUCH_KEYPAD" IntegrationID="11" UUID="D2">
+                                <Device Name="DirectKeypad" DeviceType="SEETOUCH_KEYPAD" IntegrationID="11" UUID="5002">
                                     <Components />
                                 </Device>
                             </DeviceGroups>
@@ -96,7 +96,7 @@ class TestParserEdgeCases(unittest.TestCase):
                             <DeviceGroups>
                                 <DeviceGroup Name="Loc">
                                     <Devices>
-                                        <Device Name="Keypad" IntegrationID="20" DeviceType="SEETOUCH_KEYPAD" UUID="K1">
+                                        <Device Name="Keypad" IntegrationID="20" DeviceType="SEETOUCH_KEYPAD" UUID="5003">
                                             <Components>
                                                 <!-- Valid Button -->
                                                 <Component ComponentNumber="1" ComponentType="BUTTON">
@@ -136,7 +136,7 @@ class TestParserEdgeCases(unittest.TestCase):
                             <DeviceGroups>
                                 <DeviceGroup Name="Loc">
                                     <Devices>
-                                        <Device Name="Keypad" IntegrationID="30" DeviceType="SEETOUCH_KEYPAD" UUID="K2">
+                                        <Device Name="Keypad" IntegrationID="30" DeviceType="SEETOUCH_KEYPAD" UUID="5004">
                                             <Components>
                                                 <Component ComponentNumber="1" ComponentType="BUTTON">
                                                     <!-- Empty engraving -->

@@ -389,8 +389,10 @@ class LutronXmlDbParser(object):
     integration_id = int(output_xml.get('IntegrationID') or 0)
     uuid = output_xml.get('UUID') or ""
 
-    if output_type in ('SYSTEM_SHADE', 'MOTOR'):
+    if output_type == 'SYSTEM_SHADE':
       return Shade(self._lutron, name, watts, output_type, integration_id, uuid)
+    if output_type == 'MOTOR':
+      return Motor(self._lutron, name, watts, output_type, integration_id, uuid)
     return Output(self._lutron, name, watts, output_type, integration_id, uuid)
 
   def _parse_keypad(self, keypad_xml: ET.Element, device_group: ET.Element) -> Keypad:
@@ -860,29 +862,70 @@ class Output(LutronEntity):
   @property
   def is_dimmable(self) -> bool:
     """Returns a boolean of whether or not the output is dimmable."""
-    return self.type not in ('NON_DIM', 'NON_DIM_INC', 'NON_DIM_ELV', 'EXHAUST_FAN_TYPE', 'RELAY_LIGHTING', 'SWITCHED_MOTOR') and not self.type.startswith('CCO_')
+    return self.type not in ('NON_DIM', 'NON_DIM_INC', 'NON_DIM_ELV', 'EXHAUST_FAN_TYPE', 'RELAY_LIGHTING', 'SWITCHED_MOTOR', 'MOTOR') and not self.type.startswith('CCO_')
 
 
-class Shade(Output):
-  """This is the output entity for shades in Lutron universe."""
+class _MotorizedOutput(Output):
+  """Private base for outputs controlled via raise/lower/stop actions.
+
+  Implements the three continuous-motion actions from the Lutron integration
+  protocol OUTPUT command (actions 2, 3, 4). Concrete subclasses are `Shade`
+  and `Motor`; user code should not instantiate this class directly.
+  """
   _ACTION_RAISE = 2
   _ACTION_LOWER = 3
   _ACTION_STOP = 4
 
   def start_raise(self) -> None:
-    """Starts raising the shade."""
+    """Starts continuously raising until a stop command is received."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Shade._ACTION_RAISE)
+        _MotorizedOutput._ACTION_RAISE)
 
   def start_lower(self) -> None:
-    """Starts lowering the shade."""
+    """Starts continuously lowering until a stop command is received."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Shade._ACTION_LOWER)
+        _MotorizedOutput._ACTION_LOWER)
 
   def stop(self) -> None:
-    """Starts raising the shade."""
+    """Stops any in-progress raising or lowering."""
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
-        Shade._ACTION_STOP)
+        _MotorizedOutput._ACTION_STOP)
+
+
+class Shade(_MotorizedOutput):
+  """Output entity for shades (OutputType=SYSTEM_SHADE) in the Lutron universe.
+
+  Shades support continuous raise/lower/stop via the inherited
+  `_MotorizedOutput` interface as well as direct level control via the
+  standard `Output.set_level` / `level` API.
+  """
+
+
+class Motor(_MotorizedOutput):
+  """Output entity for motors (OutputType=MOTOR).
+
+  Motors -- used for drapes, projector screens, and similar loads -- share
+  the raise/lower/stop wire protocol with shades but do NOT honor the
+  OUTPUT "Set Zone Level" action (action 1) in practice. The integration
+  protocol documentation claims motors accept level commands from 0-100,
+  but field testing shows the repeater silently ignores them, so pylutron
+  exposes motors as raise/lower/stop-only devices. Callers that need to
+  drive a motor fully open or fully closed should use `start_raise` and
+  `start_lower` directly.
+
+  Accessing `level` to query the motor's current position still works:
+  the repeater reports position updates as the motor travels, and those
+  are processed by the inherited `Output.handle_update`.
+  """
+
+  def set_level(self, new_level: float, fade_time_seconds: Optional[float] = None) -> None:
+    """Raises AttributeError: motors do not support direct level control.
+
+    See the class docstring for the rationale. Use `start_raise`,
+    `start_lower`, or `stop` instead.
+    """
+    raise AttributeError(
+        "Motor does not support set_level; use start_raise, start_lower, or stop instead.")
 
 
 class KeypadComponent(LutronEntity):
