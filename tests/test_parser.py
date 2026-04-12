@@ -1,5 +1,5 @@
 import unittest
-from pylutron import Lutron, LutronXmlDbParser
+from pylutron import Lutron, LutronXmlDbParser, Motor, Shade
 
 # Minimal XML for testing
 MINIMAL_XML = """
@@ -35,6 +35,29 @@ MINIMAL_XML = """
 </Lutron>
 """
 
+# XML exercising the full parser pipeline for motorized outputs.
+# Pattern (nested <Areas><Area>) adapted from @sergiobaiao's test in
+# https://github.com/thecynic/pylutron/pull/128
+MOTORIZED_OUTPUTS_XML = """
+<Lutron>
+    <GUID>12345678-ABCD-1234-ABCD-1234567890AB</GUID>
+    <Areas>
+        <Area Name="Project">
+            <Areas>
+                <Area Name="Living Room" IntegrationID="1">
+                    <Outputs>
+                        <Output Name="Curtain Motor" IntegrationID="10" OutputType="MOTOR" Wattage="100" UUID="OUT-MOTOR-1" />
+                        <Output Name="Window Shade" IntegrationID="11" OutputType="SYSTEM_SHADE" Wattage="50" UUID="OUT-SHADE-1" />
+                        <Output Name="Ceiling Light" IntegrationID="12" OutputType="AUTO_DETECT" Wattage="75" UUID="OUT-DIM-1" />
+                    </Outputs>
+                </Area>
+            </Areas>
+        </Area>
+    </Areas>
+</Lutron>
+"""
+
+
 class TestLutronXmlDbParser(unittest.TestCase):
     def setUp(self) -> None:
         self.lutron = Lutron('localhost', 'user', 'pass')
@@ -66,6 +89,42 @@ class TestLutronXmlDbParser(unittest.TestCase):
         self.assertEqual(output.watts, 100)
         self.assertEqual(output.type, 'NON_DIM')
         self.assertEqual(output.id, 2)
+
+    def test_parse_motor_output_as_motor(self) -> None:
+        parser = LutronXmlDbParser(self.lutron, MOTORIZED_OUTPUTS_XML)
+        self.assertTrue(parser.parse())
+        area = parser.areas[0]
+
+        outputs_by_id = {o.id: o for o in area.outputs}
+        motor = outputs_by_id[10]
+        self.assertIsInstance(motor, Motor)
+        self.assertEqual(motor.name, 'Curtain Motor')
+        self.assertEqual(motor.type, 'MOTOR')
+        self.assertEqual(motor.watts, 100)
+        self.assertFalse(motor.is_dimmable)
+
+    def test_parse_system_shade_output_as_shade_not_motor(self) -> None:
+        parser = LutronXmlDbParser(self.lutron, MOTORIZED_OUTPUTS_XML)
+        parser.parse()
+        area = parser.areas[0]
+
+        outputs_by_id = {o.id: o for o in area.outputs}
+        shade = outputs_by_id[11]
+        self.assertIsInstance(shade, Shade)
+        self.assertNotIsInstance(shade, Motor)
+        self.assertEqual(shade.type, 'SYSTEM_SHADE')
+
+    def test_parse_mixed_outputs_preserves_non_motorized(self) -> None:
+        parser = LutronXmlDbParser(self.lutron, MOTORIZED_OUTPUTS_XML)
+        parser.parse()
+        area = parser.areas[0]
+
+        self.assertEqual(len(area.outputs), 3)
+        outputs_by_id = {o.id: o for o in area.outputs}
+        dimmer = outputs_by_id[12]
+        self.assertNotIsInstance(dimmer, Shade)
+        self.assertNotIsInstance(dimmer, Motor)
+        self.assertEqual(dimmer.type, 'AUTO_DETECT')
 
     def test_parse_keypad(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MINIMAL_XML)
