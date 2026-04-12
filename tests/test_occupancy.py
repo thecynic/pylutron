@@ -12,7 +12,7 @@ class TestOccupancy(unittest.TestCase):
 
     def test_occupancy_group_state(self) -> None:
         # Occupancy Group 100
-        occ_group = OccupancyGroup(self.lutron, "100", "uuid-occ")
+        occ_group = OccupancyGroup(self.lutron, "100", "700")
         
         # Test handle_update for occupancy change
         # Action is 3 (_ACTION_STATE)
@@ -27,7 +27,7 @@ class TestOccupancy(unittest.TestCase):
         self.assertEqual(occ_group.state, OccupancyGroup.State.VACANT)
         
     def test_motion_sensor_battery(self) -> None:
-        sensor = MotionSensor(self.lutron, "Sensor 1", 500, "uuid-sensor")
+        sensor = MotionSensor(self.lutron, "Sensor 1", 500, "701")
         
         # MotionSensor battery query
         sensor._do_query_battery()
@@ -38,7 +38,7 @@ class TestOccupancy(unittest.TestCase):
         self.assertTrue(args.startswith('?DEVICE,500'))
 
     def test_occupancy_event(self) -> None:
-        occ_group = OccupancyGroup(self.lutron, "100", "uuid-occ")
+        occ_group = OccupancyGroup(self.lutron, "100", "700")
         handler = MagicMock()
         occ_group.subscribe(handler, None)
         

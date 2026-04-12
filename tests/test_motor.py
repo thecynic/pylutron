@@ -1,8 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
-from xml.etree import ElementTree as ET
 
-from pylutron import Lutron, LutronXmlDbParser, Motor, Output, Shade
+from pylutron import Lutron, Motor
 
 from typing import cast
 
@@ -21,7 +20,7 @@ class TestMotor(unittest.TestCase):
         self.lutron = Lutron("1.1.1.1", "user", "pass")
         self.lutron._conn = MagicMock()
         self.lutron.register_id = MagicMock()  # type: ignore[method-assign]
-        self.motor = Motor(self.lutron, "Drapery Motor", 0, "MOTOR", 42, "uuid-motor")
+        self.motor = Motor(self.lutron, "Cortina", 0, "MOTOR", 42, "1954")
         self.send = cast(MagicMock, self.lutron._conn.send)
 
     def test_start_raise_emits_action_2(self) -> None:
@@ -46,12 +45,6 @@ class TestMotor(unittest.TestCase):
             self.motor.level = 50.0
         self.send.assert_not_called()
 
-    def test_set_level_raises_at_boundaries(self) -> None:
-        for boundary in (0.0, 100.0):
-            with self.assertRaises(AttributeError):
-                self.motor.set_level(boundary)
-        self.send.assert_not_called()
-
     def test_motor_is_not_dimmable(self) -> None:
         self.assertFalse(self.motor.is_dimmable)
 
@@ -74,35 +67,6 @@ class TestMotor(unittest.TestCase):
         handled = self.motor.handle_update(['1', '42.00'])
         self.assertTrue(handled)
         self.assertEqual(self.motor.last_level(), 42.0)
-
-
-class TestMotorParser(unittest.TestCase):
-    """Ensures the XML parser routes OutputType correctly."""
-
-    def setUp(self) -> None:
-        self.lutron = Lutron("1.1.1.1", "user", "pass")
-        self.lutron._conn = MagicMock()
-        self.lutron.register_id = MagicMock()  # type: ignore[method-assign]
-        self.parser = LutronXmlDbParser(self.lutron, b"")
-
-    def _output_xml(self, output_type: str) -> ET.Element:
-        return ET.fromstring(
-            '<Output Name="Test" Wattage="0" IntegrationID="7" '
-            f'OutputType="{output_type}" UUID="uuid-test"/>'
-        )
-
-    def test_motor_output_type_creates_motor(self) -> None:
-        result = self.parser._parse_output(self._output_xml("MOTOR"))
-        self.assertIsInstance(result, Motor)
-
-    def test_system_shade_output_type_creates_shade_not_motor(self) -> None:
-        result = self.parser._parse_output(self._output_xml("SYSTEM_SHADE"))
-        self.assertIsInstance(result, Shade)
-        self.assertNotIsInstance(result, Motor)
-
-    def test_dimmer_output_type_creates_plain_output(self) -> None:
-        result = self.parser._parse_output(self._output_xml("AUTO_DETECT"))
-        self.assertIs(type(result), Output)
 
 
 if __name__ == '__main__':

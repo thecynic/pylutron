@@ -6,22 +6,22 @@ MINIMAL_XML = """
 <Lutron>
     <GUID>12345678-ABCD-1234-ABCD-1234567890AB</GUID>
     <OccupancyGroups>
-        <OccupancyGroup UUID="OCC-1" OccupancyGroupNumber="1" />
+        <OccupancyGroup UUID="100" OccupancyGroupNumber="1" />
     </OccupancyGroups>
     <Areas>
         <Area Name="Project">
             <Areas>
                 <Area Name="Living Room" IntegrationID="1" OccupancyGroupAssignedToID="1">
                     <Outputs>
-                        <Output Name="Sconce" IntegrationID="2" OutputType="NON_DIM" Wattage="100" UUID="OUT-1" />
+                        <Output Name="Sconce" IntegrationID="2" OutputType="NON_DIM" Wattage="100" UUID="501" />
                     </Outputs>
                     <DeviceGroups>
                         <DeviceGroup Name="Wall Keypad">
                              <Devices>
-                                 <Device Name="Main" IntegrationID="3" DeviceType="SEETOUCH_KEYPAD" UUID="DEV-1">
+                                 <Device Name="Main" IntegrationID="3" DeviceType="SEETOUCH_KEYPAD" UUID="502">
                                     <Components>
                                         <Component ComponentNumber="1" ComponentType="BUTTON">
-                                            <Button Engraving="On" ButtonType="Toggle" Direction="Press" UUID="BTN-1" />
+                                            <Button Engraving="On" ButtonType="Toggle" Direction="Press" UUID="503" />
                                         </Component>
                                     </Components>
                                  </Device>
@@ -46,9 +46,10 @@ MOTORIZED_OUTPUTS_XML = """
             <Areas>
                 <Area Name="Living Room" IntegrationID="1">
                     <Outputs>
-                        <Output Name="Curtain Motor" IntegrationID="10" OutputType="MOTOR" Wattage="100" UUID="OUT-MOTOR-1" />
-                        <Output Name="Window Shade" IntegrationID="11" OutputType="SYSTEM_SHADE" Wattage="50" UUID="OUT-SHADE-1" />
-                        <Output Name="Ceiling Light" IntegrationID="12" OutputType="AUTO_DETECT" Wattage="75" UUID="OUT-DIM-1" />
+                        <Output Name="Cortina" IntegrationID="10" OutputType="MOTOR" Wattage="0" UUID="1954" />
+                        <Output Name="Window Shade" IntegrationID="11" OutputType="SYSTEM_SHADE" Wattage="0" UUID="2001" />
+                        <!-- Non-motorized output to verify it isn't misrouted to Shade/Motor -->
+                        <Output Name="LEDs" IntegrationID="12" OutputType="INC" Wattage="40" UUID="714" />
                     </Outputs>
                 </Area>
             </Areas>
@@ -98,9 +99,9 @@ class TestLutronXmlDbParser(unittest.TestCase):
         outputs_by_id = {o.id: o for o in area.outputs}
         motor = outputs_by_id[10]
         self.assertIsInstance(motor, Motor)
-        self.assertEqual(motor.name, 'Curtain Motor')
+        self.assertEqual(motor.name, 'Cortina')
         self.assertEqual(motor.type, 'MOTOR')
-        self.assertEqual(motor.watts, 100)
+        self.assertEqual(motor.watts, 0)
         self.assertFalse(motor.is_dimmable)
 
     def test_parse_system_shade_output_as_shade_not_motor(self) -> None:
@@ -124,7 +125,8 @@ class TestLutronXmlDbParser(unittest.TestCase):
         dimmer = outputs_by_id[12]
         self.assertNotIsInstance(dimmer, Shade)
         self.assertNotIsInstance(dimmer, Motor)
-        self.assertEqual(dimmer.type, 'AUTO_DETECT')
+        self.assertEqual(dimmer.type, 'INC')
+        self.assertEqual(dimmer.watts, 40)
 
     def test_parse_keypad(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MINIMAL_XML)
