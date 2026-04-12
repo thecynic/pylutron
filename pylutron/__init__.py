@@ -72,7 +72,10 @@ class LutronConnection(threading.Thread):
   PW_PROMPT = b'password: '
   PROMPT = re.compile(rb'([GQ]NET>|login: )')
 
-  def __init__(self, host: str, user: str, password: str, recv_callback: Callable[[str], None], connection_factory: Any = telnetlib3.open_connection) -> None:
+  PROMPT_GNET = "GNET"
+  PROMPT_QNET = "QNET"
+
+  def __init__(self, host: str, user: str, password: str, recv_callback: Callable[[str], None], connection_factory: Any = telnetlib3.open_connection, enable_monitoring: bool = True) -> None:
     """Initializes the lutron connection, doesn't actually connect."""
     threading.Thread.__init__(self)
 
@@ -86,11 +89,22 @@ class LutronConnection(threading.Thread):
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
     self._connection_factory = connection_factory
+    self._enable_monitoring = enable_monitoring
+    self._prompt_type: Optional[str] = None
     self._done = False
     self._loop = asyncio.new_event_loop()
     self._exception: Optional[LutronException] = None
 
     self.daemon = True
+
+  @property
+  def prompt_type(self) -> Optional[str]:
+    """The prompt type returned by the controller after login.
+
+    Returns "GNET" for RadioRA 2 / QS Standalone, "QNET" for HomeWorks QS,
+    or None if login has not completed yet.
+    """
+    return self._prompt_type
 
   def connect(self) -> None:
     """Connects to the lutron controller."""
@@ -183,13 +197,20 @@ class LutronConnection(threading.Thread):
       _LOGGER.error("Timeout waiting for GNET or QNET prompt, checking if we are back at login")
       raise LutronLoginError("Timed out waiting for GNET/QNET prompt (check credentials)")
 
-    await self._send_coro("#MONITORING,12,2")
-    await self._send_coro("#MONITORING,255,2")
-    await self._send_coro("#MONITORING,3,1")
-    await self._send_coro("#MONITORING,4,1")
-    await self._send_coro("#MONITORING,5,1")
-    await self._send_coro("#MONITORING,6,1")
-    await self._send_coro("#MONITORING,8,1")
+    if b'QNET>' in res:
+      self._prompt_type = LutronConnection.PROMPT_QNET
+    else:
+      self._prompt_type = LutronConnection.PROMPT_GNET
+    _LOGGER.info("Detected prompt type: %s" % self._prompt_type)
+
+    if self._enable_monitoring:
+      await self._send_coro("#MONITORING,12,2")
+      await self._send_coro("#MONITORING,255,2")
+      await self._send_coro("#MONITORING,3,1")
+      await self._send_coro("#MONITORING,4,1")
+      await self._send_coro("#MONITORING,5,1")
+      await self._send_coro("#MONITORING,6,1")
+      await self._send_coro("#MONITORING,8,1")
 
   def _disconnect_locked(self) -> None:
     """Closes the current connection. Assume self._lock is held."""
@@ -496,6 +517,7 @@ class Lutron(object):
     self._password = password
     self._name = ""
     self._conn = LutronConnection(host, user, password, self._recv)
+    self._cmd_conn: Optional[LutronConnection] = None
     self._ids: Dict[str, Dict[int, LutronEntity]] = {}
     self._legacy_subscribers: Dict[LutronEntity, Callable[[LutronEntity], None]] = {}
     self._areas: List[Area] = []
@@ -572,15 +594,35 @@ class Lutron(object):
     obj = ids[integration_id]
     obj.handle_update(args)
 
+  @property
+  def is_homeworks(self) -> bool:
+    """True when connected to a HomeWorks QS processor (QNET prompt)."""
+    return self._conn.prompt_type == LutronConnection.PROMPT_QNET
+
   def connect(self) -> None:
-    """Connects to the Lutron controller to send and receive commands and status"""
+    """Connects to the Lutron controller to send and receive commands and status.
+
+    On HomeWorks QS systems (detected via the QNET> prompt), a second
+    connection is opened for sending commands. HomeWorks only delivers
+    status updates to sessions that did not originate the command, so the
+    primary connection is kept as a monitor-only session while commands
+    are routed through the dedicated send connection.
+    """
     self._conn.connect()
+
+    if self._conn.prompt_type == LutronConnection.PROMPT_QNET:
+      _LOGGER.info("HomeWorks QS detected, opening dedicated command connection")
+      self._cmd_conn = LutronConnection(
+          self._host, self._user, self._password,
+          self._recv, enable_monitoring=False)
+      self._cmd_conn.connect()
 
   def send(self, op: str, cmd: str, integration_id: int, *args: Any) -> None:
     """Formats and sends the requested command to the Lutron controller."""
     out_cmd = ",".join(
         (cmd, str(integration_id)) + tuple((str(x) for x in args if x is not None)))
-    self._conn.send(op + out_cmd)
+    conn = self._cmd_conn if self._cmd_conn is not None else self._conn
+    conn.send(op + out_cmd)
 
   def load_xml_db(self, cache_path: Optional[str] = None) -> bool:
     """Load the Lutron database from the server.
