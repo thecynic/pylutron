@@ -602,7 +602,14 @@ class Lutron(object):
     if not loaded_from:
       import urllib.request
       url = 'http://' + self._host + '/DbXmlInfo.xml'
-      with urllib.request.urlopen(url) as xmlfile:
+      # Some repeaters (e.g. HomeWorks QS) serve DbXmlInfo.xml over HTTP/1.1 with
+      # no Content-Length and keep the connection open. With no length delimiter,
+      # read() relies on the server closing the connection to signal end-of-body,
+      # and under load a short read can return a truncated document that fails to
+      # parse ("not well-formed (invalid token)"). Ask the server to close the
+      # connection so the body is delimited by EOF, and set an explicit timeout.
+      req = urllib.request.Request(url, headers={'Connection': 'close'})
+      with urllib.request.urlopen(req, timeout=60) as xmlfile:
         xml_db = xmlfile.read()
         loaded_from = 'repeater'
 
