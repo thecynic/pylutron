@@ -48,9 +48,10 @@ class TestLutronConnection(AsyncTestBase):
             LutronConnection.PW_PROMPT
         ]
         self.mock_reader.readuntil_pattern.return_value = b'QNET> '
-        
+
         await self.conn._do_login()
         self.mock_reader.readuntil_pattern.assert_called_with(LutronConnection.PROMPT)
+        self.assertEqual(self.conn.prompt_type, LutronConnection.PROMPT_QNET)
 
     async def test_login_timeout_user_prompt(self) -> None:
         """Test timeout waiting for the initial login prompt."""
