@@ -670,6 +670,21 @@ class _RequestHelper(object):
       action()
     return ev
 
+  def cancel(self, ev: threading.Event) -> None:
+    """Removes a waiter that gave up before the reply arrived.
+
+    Callers wait with a timeout. Without removing the abandoned waiter the
+    queue never becomes empty again, so request() never sees first=True and
+    the action is never re-issued -- the object stops querying the controller
+    entirely and its state stays frozen until the process is restarted.
+    """
+    with self.__lock:
+      try:
+        self.__events.remove(ev)
+      except ValueError:
+        # Already cleared by notify(); the reply beat us to it.
+        pass
+
   def notify(self) -> None:
     with self.__lock:
       events = self.__events
@@ -822,7 +837,8 @@ class Output(LutronEntity):
   def level(self) -> float:
     """Returns the current output level by querying the remote controller."""
     ev = self._query_waiters.request(self._do_query_level)
-    ev.wait(1.0)
+    if not ev.wait(1.0):
+      self._query_waiters.cancel(ev)
     return self._level
 
   @level.setter
@@ -1108,7 +1124,8 @@ class Led(KeypadComponent):
   def state(self) -> int:
     """Returns the current LED state by querying the remote controller."""
     ev = self._query_waiters.request(self._do_query_state)
-    ev.wait(1.0)
+    if not ev.wait(1.0):
+      self._query_waiters.cancel(ev)
     return self._state
 
   @state.setter
@@ -1305,7 +1322,8 @@ class MotionSensor(LutronEntity):
     # So rate limit queries to once an hour.
     if self._update_age > 3600.0:
       ev = self._query_waiters.request(self._do_query_battery)
-      ev.wait(1.0)
+      if not ev.wait(1.0):
+        self._query_waiters.cancel(ev)
     return self._battery
 
   @property
@@ -1400,7 +1418,8 @@ class OccupancyGroup(LutronEntity):
     # Poll for the first request.
     if self._state == OccupancyGroup.State.UNINITIALIZED:
       ev = self._query_waiters.request(self._do_query_state)
-      ev.wait(1.0)
+      if not ev.wait(1.0):
+        self._query_waiters.cancel(ev)
     return self._state
 
   def __str__(self) -> str:
