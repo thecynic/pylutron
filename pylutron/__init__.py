@@ -838,8 +838,6 @@ class Output(LutronEntity):
 
   def set_level(self, new_level: float, fade_time_seconds: Optional[float] = None) -> None:
     """Sets the new output level."""
-    if self._level == new_level:
-      return
     self._lutron.send(Lutron.OP_EXECUTE, Output._CMD_TYPE, self._integration_id,
         Output._ACTION_ZONE_LEVEL, "%.2f" % new_level, self._fade_time(fade_time_seconds))
     self._level = new_level
