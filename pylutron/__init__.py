@@ -276,11 +276,61 @@ class LutronXmlDbParser(object):
     self.areas: List[Area] = []
     self._occupancy_groups: Dict[str, OccupancyGroup] = {}
     self.project_name: Optional[str] = None
+    self._scene_levels: Dict[str, Dict[str, Dict[int, float]]] = {}
+
+  # Area integration id -> scene number -> {output integration id: level}.
+  # Buttons reference scenes by (area, number), and the area owning the scene
+  # is not necessarily the one owning the button, so this is built up front.
+  def _build_scene_table(self, root: ET.Element) -> None:
+    for area_xml in root.iter('Area'):
+      area_id = area_xml.get('IntegrationID')
+      if area_id is None:
+        continue
+      for scene_xml in area_xml.findall('./Scenes/Scene'):
+        number = scene_xml.get('Number')
+        if number is None:
+          continue
+        levels, _ = self._preset_assignments(scene_xml)
+        self._scene_levels.setdefault(area_id, {})[number] = levels
+
+  @staticmethod
+  def _preset_assignments(
+      node: ET.Element) -> Tuple[Dict[int, float], List[Tuple[str, str]]]:
+    """Splits a node's PresetAssignments into direct levels and scene refs."""
+    levels: Dict[int, float] = {}
+    scene_refs: List[Tuple[str, str]] = []
+    for pa_xml in node.iter('PresetAssignment'):
+      integration_id = pa_xml.findtext('IntegrationID')
+      if not integration_id:
+        continue
+      kind = pa_xml.get('AssignmentName')
+      if kind == 'GOTO_LEVEL':
+        try:
+          levels[int(integration_id)] = float(pa_xml.findtext('Level') or 0)
+        except ValueError:
+          continue
+      elif kind == 'GOTO_SCENE':
+        number = pa_xml.findtext('Number')
+        if number:
+          scene_refs.append((integration_id, number))
+    return levels, scene_refs
+
+  def _button_affected_outputs(self, button_xml: ET.Element) -> Dict[int, float]:
+    """Resolves what pressing this button assigns, scene refs included."""
+    affected: Dict[int, float] = {}
+    for action_xml in button_xml.findall('./Actions/Action'):
+      for preset_xml in action_xml.findall('./Presets/Preset'):
+        levels, scene_refs = self._preset_assignments(preset_xml)
+        affected.update(levels)
+        for area_id, number in scene_refs:
+          affected.update(self._scene_levels.get(area_id, {}).get(number, {}))
+    return affected
 
   def parse(self) -> bool:
     """Main entrypoint into the parser. It interprets and creates all the
     relevant Lutron objects and stuffs them into the appropriate hierarchy."""
     root = ET.fromstring(self._xml_db_str)
+    self._build_scene_table(root)
     # The structure is something like this:
     # <Areas>
     #   <Area ...>
@@ -435,7 +485,8 @@ class LutronXmlDbParser(object):
                     num=int(component_xml.get('ComponentNumber') or 0),
                     button_type=button_type,
                     direction=direction,
-                    uuid=button_xml.get('UUID') or "")
+                    uuid=button_xml.get('UUID') or "",
+                    affected_outputs=self._button_affected_outputs(button_xml))
     return button
 
   def _parse_led(self, keypad: Keypad, component_xml: ET.Element) -> Led:
@@ -999,11 +1050,12 @@ class Button(KeypadComponent):
     RELEASED = 2
     DOUBLE_CLICKED = 3
 
-  def __init__(self, lutron: Lutron, keypad: Keypad, name: str, num: int, button_type: str, direction: Optional[str], uuid: str) -> None:
+  def __init__(self, lutron: Lutron, keypad: Keypad, name: str, num: int, button_type: str, direction: Optional[str], uuid: str, affected_outputs: Optional[Dict[int, float]] = None) -> None:
     """Initializes the Button class."""
     super(Button, self).__init__(lutron, keypad, name, num, num, uuid)
     self._button_type = button_type
     self._direction = direction
+    self._affected_outputs = dict(affected_outputs or {})
 
   def __str__(self) -> str:
     """Pretty printed string value of the Button object."""
@@ -1019,6 +1071,26 @@ class Button(KeypadComponent):
   def button_type(self) -> str:
     """Returns the button type (Toggle, MasterRaiseLower, etc.)."""
     return self._button_type
+
+  @property
+  def affected_outputs(self) -> Dict[int, float]:
+    """Outputs this button can change, mapped to the level it assigns them.
+
+    Read from the button's programming in the XML database: its Press action's
+    presets, with GOTO_SCENE assignments resolved through the target area's
+    scene table. Empty for buttons that drive nothing (or whose programming the
+    database does not describe).
+
+    The keys are dependable -- pressing this button can change exactly these
+    outputs and no others. That is enough to refresh the right subset after a
+    press instead of every output in the system.
+
+    The values are what the programming assigns, which is not always what the
+    outputs end up at: a toggle button's result depends on the current state,
+    and a raise/lower button's depends on how long it is held. Treat them as a
+    prediction to be confirmed, not as fact.
+    """
+    return dict(self._affected_outputs)
 
   def press(self) -> None:
     """Triggers a simulated button press to the Keypad."""
