@@ -389,7 +389,9 @@ class LutronXmlDbParser(object):
     integration_id = int(output_xml.get('IntegrationID') or 0)
     uuid = output_xml.get('UUID') or ""
 
-    if output_type == 'SYSTEM_SHADE':
+    if output_type in ('SYSTEM_SHADE', 'SIVOIA_QED'):
+      # Sivoia QS shades and the earlier Sivoia QED shade interfaces speak the
+      # same OUTPUT commands (set level, raise, lower, stop).
       return Shade(self._lutron, name, watts, output_type, integration_id, uuid)
     if output_type == 'MOTOR':
       return Motor(self._lutron, name, watts, output_type, integration_id, uuid)
@@ -900,7 +902,7 @@ class _MotorizedOutput(Output):
 
 
 class Shade(_MotorizedOutput):
-  """Output entity for shades (OutputType=SYSTEM_SHADE) in the Lutron universe.
+  """Output entity for shades (OutputType=SYSTEM_SHADE or SIVOIA_QED) in the Lutron universe.
 
   Shades support continuous raise/lower/stop via the inherited
   `_MotorizedOutput` interface as well as direct level control via the
