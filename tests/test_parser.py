@@ -48,6 +48,7 @@ MOTORIZED_OUTPUTS_XML = """
                     <Outputs>
                         <Output Name="Cortina" IntegrationID="10" OutputType="MOTOR" Wattage="0" UUID="1954" />
                         <Output Name="Window Shade" IntegrationID="11" OutputType="SYSTEM_SHADE" Wattage="0" UUID="2001" />
+                        <Output Name="Drapery" IntegrationID="13" OutputType="SIVOIA_QED" Wattage="0" UUID="2002" />
                         <!-- Non-motorized output to verify it isn't misrouted to Shade/Motor -->
                         <Output Name="LEDs" IntegrationID="12" OutputType="INC" Wattage="40" UUID="714" />
                     </Outputs>
@@ -115,12 +116,24 @@ class TestLutronXmlDbParser(unittest.TestCase):
         self.assertNotIsInstance(shade, Motor)
         self.assertEqual(shade.type, 'SYSTEM_SHADE')
 
+    def test_parse_sivoia_qed_output_as_shade(self) -> None:
+        parser = LutronXmlDbParser(self.lutron, MOTORIZED_OUTPUTS_XML)
+        parser.parse()
+        area = parser.areas[0]
+
+        outputs_by_id = {o.id: o for o in area.outputs}
+        shade = outputs_by_id[13]
+        self.assertIsInstance(shade, Shade)
+        self.assertNotIsInstance(shade, Motor)
+        self.assertEqual(shade.name, 'Drapery')
+        self.assertEqual(shade.type, 'SIVOIA_QED')
+
     def test_parse_mixed_outputs_preserves_non_motorized(self) -> None:
         parser = LutronXmlDbParser(self.lutron, MOTORIZED_OUTPUTS_XML)
         parser.parse()
         area = parser.areas[0]
 
-        self.assertEqual(len(area.outputs), 3)
+        self.assertEqual(len(area.outputs), 4)
         outputs_by_id = {o.id: o for o in area.outputs}
         dimmer = outputs_by_id[12]
         self.assertNotIsInstance(dimmer, Shade)
