@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
-from pylutron import Lutron, Output
+from pylutron import Lutron, Output, _RequestHelper
 
 from typing import cast
 
@@ -36,6 +36,37 @@ class TestOutput(unittest.TestCase):
         handled = self.output.handle_update(['1', '75.00'])
         self.assertTrue(handled)
         self.assertEqual(self.output.last_level(), 75.0)
+
+    def test_query_is_reissued_after_a_timed_out_wait(self) -> None:
+        """A query whose reply never arrives must not wedge the object.
+
+        request() only performs the action when its wait queue is empty, and
+        callers wait with a timeout. A caller that gave up used to leave its
+        event behind, so the queue never emptied again and no further query was
+        ever sent -- the output stopped talking to the controller for good.
+        """
+        send = cast(MagicMock, self.lutron._conn.send)
+        _ = self.output.level  # no reply arrives, wait times out
+        _ = self.output.level  # must ask again rather than give up silently
+        self.assertEqual(send.call_count, 2)
+        send.assert_called_with('?OUTPUT,1,1')
+
+    def test_request_helper_cancel(self) -> None:
+        calls = []
+        helper = _RequestHelper()
+        ev1 = helper.request(lambda: calls.append(1))
+        # A second request while one is pending is still coalesced.
+        ev2 = helper.request(lambda: calls.append(2))
+        self.assertEqual(calls, [1])
+        helper.cancel(ev1)
+        helper.cancel(ev2)
+        # With both waiters gone the next request performs the action again.
+        helper.request(lambda: calls.append(3))
+        self.assertEqual(calls, [1, 3])
+        # Cancelling an event that notify() already cleared is a no-op.
+        helper.notify()
+        helper.cancel(ev1)
+
 
 if __name__ == '__main__':
     unittest.main()
