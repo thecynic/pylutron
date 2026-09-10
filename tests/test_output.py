@@ -37,5 +37,28 @@ class TestOutput(unittest.TestCase):
         self.assertTrue(handled)
         self.assertEqual(self.output.last_level(), 75.0)
 
+    def test_set_level_is_not_suppressed_by_a_stale_cache(self) -> None:
+        """Setting the level must always send, even if the cache agrees.
+
+        The cached level is only as good as the last report from the
+        controller. It goes stale whenever a report is lost, and on systems
+        that do not send unsolicited reports for a given change it is stale by
+        construction. Suppressing the command then leaves the caller with no
+        way to reassert a level: the first request appears to work, every
+        identical one after it is silently dropped.
+        """
+        send = cast(MagicMock, self.lutron._conn.send)
+        self.output.set_level(50.0)
+        self.output.set_level(50.0)
+        self.assertEqual(send.call_count, 2)
+
+    def test_set_level_honours_a_new_fade_time(self) -> None:
+        """Same level, different fade, is a different command."""
+        send = cast(MagicMock, self.lutron._conn.send)
+        self.output.set_level(50.0)
+        self.output.set_level(50.0, fade_time_seconds=4)
+        send.assert_called_with('#OUTPUT,1,1,50.00,0:00:04')
+
+
 if __name__ == '__main__':
     unittest.main()
