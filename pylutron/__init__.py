@@ -82,6 +82,7 @@ class LutronConnection(threading.Thread):
     self._reader: Optional[telnetlib3.TelnetReader] = None
     self._writer: Optional[telnetlib3.TelnetWriter] = None
     self._connected = False
+    self._ever_connected = False
     self._lock = threading.Lock()
     self._connect_cond = threading.Condition(lock=self._lock)
     self._recv_cb = recv_callback
@@ -213,6 +214,7 @@ class LutronConnection(threading.Thread):
         await self._do_login()
         with self._lock:
           self._connected = True
+          self._ever_connected = True
           self._connect_cond.notify_all()
         _LOGGER.info("Connected")
 
@@ -231,13 +233,13 @@ class LutronConnection(threading.Thread):
         self._done = True
       except _EXPECTED_NETWORK_EXCEPTIONS as e:
         _LOGGER.exception("Network exception in main loop")
-        # If we have not yet connected, don't try to reconnect
-        if not self._connected:
+        # If we have never connected, don't try to reconnect
+        if not self._ever_connected:
           self._exception = LutronConnectionError(str(e))
           self._done = True
       except Exception as e:
         _LOGGER.exception("Uncaught exception in main loop")
-        if not self._connected:
+        if not self._ever_connected:
           self._exception = LutronException(str(e))
           self._done = True
       

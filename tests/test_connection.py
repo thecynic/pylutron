@@ -157,5 +157,28 @@ class TestLutronConnection(AsyncTestBase):
             self.conn._done = True
             self.conn.join(timeout=1)
 
+    def test_disconnect_preserves_ever_connected(self) -> None:
+        """A disconnect must not erase the fact that we once connected.
+
+        Regression: the reconnect guard in _main_loop tested self._connected, but
+        _disconnect_locked() clears that flag before the retry runs. The first failed
+        reconnect therefore looked like a never-connected failure, set _done = True,
+        and the reader thread exited permanently after a single retry.
+        """
+        async def mock_do_login_success() -> None:
+            self.mock_reader.readline.return_value = b""
+            await asyncio.sleep(0.1)
+
+        with patch.object(LutronConnection, '_do_login', side_effect=mock_do_login_success):
+            self.conn.connect()
+            self.assertTrue(self.conn._ever_connected)
+            with self.conn._lock:
+                self.conn._disconnect_locked()
+            self.assertFalse(self.conn._connected)
+            self.assertTrue(self.conn._ever_connected)
+            self.conn._done = True
+            self.conn.join(timeout=1)
+
+
 if __name__ == '__main__':
     unittest.main()
