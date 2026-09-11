@@ -41,7 +41,22 @@ class LutronException(Exception):
 
 
 class LutronLoginError(LutronException):
-  """Raised when login fails."""
+  """Raised when login fails.
+
+  Covers both genuine credential rejection (see LutronAuthenticationError) and
+  transient login-time timeouts. The reconnect loop treats a bare
+  LutronLoginError (a timeout) as retryable once we've connected before.
+  """
+  pass
+
+
+class LutronAuthenticationError(LutronLoginError):
+  """Raised when the controller rejects the username/password.
+
+  Distinct from a login timeout (also a LutronLoginError): bad credentials
+  never become valid by retrying, so the reconnect loop treats this as fatal
+  even after an earlier successful connection.
+  """
   pass
 
 
@@ -179,7 +194,7 @@ class LutronConnection(threading.Thread):
       # Wait for either the GNET/QNET prompt or the login prompt again
       res = await asyncio.wait_for(self._reader.readuntil_pattern(LutronConnection.PROMPT), timeout=10.0)
       if LutronConnection.USER_PROMPT in res:
-        raise LutronLoginError("Incorrect username or password")
+        raise LutronAuthenticationError("Incorrect username or password")
     except asyncio.TimeoutError:
       _LOGGER.error("Timeout waiting for GNET or QNET prompt, checking if we are back at login")
       raise LutronLoginError("Timed out waiting for GNET/QNET prompt (check credentials)")
@@ -225,12 +240,22 @@ class LutronConnection(threading.Thread):
             _LOGGER.warning("Connection closed by remote")
             break
           self._recv_cb(line.decode('ascii').rstrip())
-      except LutronException as e:
-        _LOGGER.exception("Fatal error during login")
-        # For fatal errors like auth failure, we might want to stop or notify
-        # For now, let's stop the loop to avoid infinite spamming
+      except LutronAuthenticationError as e:
+        # Bad credentials never become valid by retrying, so give up whether or
+        # not we've connected before.
+        _LOGGER.exception("Authentication failed")
         self._exception = e
         self._done = True
+      except LutronException as e:
+        # Login timeouts (LutronLoginError) and other Lutron errors are
+        # transient once we've connected at least once -- e.g. the controller
+        # is slow to answer the login prompt right after a network blip. Only
+        # give up if we have never successfully connected, matching the network
+        # branch below; otherwise fall through to the reconnect sleep.
+        _LOGGER.exception("Error during login")
+        if not self._ever_connected:
+          self._exception = e
+          self._done = True
       except _EXPECTED_NETWORK_EXCEPTIONS as e:
         _LOGGER.exception("Network exception in main loop")
         # If we have never connected, don't try to reconnect

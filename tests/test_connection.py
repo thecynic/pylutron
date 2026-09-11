@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 import asyncio
 import threading
 import time
-from pylutron import LutronConnection, LutronLoginError, LutronConnectionError
+from pylutron import LutronConnection, LutronLoginError, LutronConnectionError, LutronAuthenticationError
 from typing import List, Optional, Tuple, Any
 
 class AsyncTestBase(unittest.IsolatedAsyncioTestCase):
@@ -157,13 +157,11 @@ class TestLutronConnection(AsyncTestBase):
             self.conn._done = True
             self.conn.join(timeout=1)
 
-    def test_disconnect_preserves_ever_connected(self) -> None:
-        """A disconnect must not erase the fact that we once connected.
+    def test_disconnect_does_not_clear_ever_connected(self) -> None:
+        """_disconnect_locked() clears _connected but must leave _ever_connected set.
 
-        Regression: the reconnect guard in _main_loop tested self._connected, but
-        _disconnect_locked() clears that flag before the retry runs. The first failed
-        reconnect therefore looked like a never-connected failure, set _done = True,
-        and the reader thread exited permanently after a single retry.
+        Narrow unit check on the flag only. It does NOT exercise the reconnect
+        guard in _main_loop -- see test_main_loop_* below for that.
         """
         async def mock_do_login_success() -> None:
             self.mock_reader.readline.return_value = b""
@@ -178,6 +176,63 @@ class TestLutronConnection(AsyncTestBase):
             self.assertTrue(self.conn._ever_connected)
             self.conn._done = True
             self.conn.join(timeout=1)
+
+    async def test_main_loop_retries_login_timeout_after_connect(self) -> None:
+        """A login timeout on a reconnect (after a successful connect) must retry.
+
+        Drives _main_loop directly: first _do_login() succeeds (so _ever_connected
+        becomes True and the inner read loop breaks on an empty line), every later
+        call raises a login timeout -- a LutronLoginError, the same type raised by
+        _do_login()'s three asyncio.TimeoutError paths. With the reconnect guard in
+        place the loop keeps retrying; reverting it (the except LutronException
+        branch setting _done unconditionally) makes _do_login run exactly twice and
+        _exception get set, which this test would catch.
+        """
+        calls = {'n': 0}
+
+        async def do_login() -> None:
+            calls['n'] += 1
+            if calls['n'] == 1:
+                self.conn._reader = self.mock_reader
+                self.mock_reader.readline.return_value = b""
+                return
+            if calls['n'] >= 3:
+                self.conn._done = True  # stop the loop after we've proven it retried
+            raise LutronLoginError("Timed out waiting for GNET/QNET prompt (check credentials)")
+
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login), \
+             patch('pylutron.asyncio.sleep', new=AsyncMock()):
+            await self.conn._main_loop()
+
+        self.assertGreaterEqual(calls['n'], 3,
+                                "login timeout after a successful connect must retry, not give up")
+        self.assertIsNone(self.conn._exception)
+
+    async def test_main_loop_stops_on_authentication_error(self) -> None:
+        """Bad credentials must stay fatal, even after a successful connect.
+
+        Same harness as the retry test, but the reconnect raises
+        LutronAuthenticationError ("Incorrect username or password"). The loop must
+        set _done and stop rather than retry a credential that will never work.
+        """
+        calls = {'n': 0}
+
+        async def do_login() -> None:
+            calls['n'] += 1
+            if calls['n'] == 1:
+                self.conn._reader = self.mock_reader
+                self.mock_reader.readline.return_value = b""
+                return
+            raise LutronAuthenticationError("Incorrect username or password")
+
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login), \
+             patch('pylutron.asyncio.sleep', new=AsyncMock()):
+            await self.conn._main_loop()
+
+        self.assertEqual(calls['n'], 2,
+                         "bad credentials must be fatal even after a successful connect")
+        self.assertTrue(self.conn._done)
+        self.assertIsInstance(self.conn._exception, LutronAuthenticationError)
 
 
 if __name__ == '__main__':
