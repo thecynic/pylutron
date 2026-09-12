@@ -429,5 +429,61 @@ class TestLutronConnectionDisconnect(unittest.TestCase):
                         f"disconnect waited out the backoff ({elapsed:.2f}s)")
 
 
+    def test_disconnect_survives_loop_closing_underneath_it(self) -> None:
+        """The reader may finish and close the loop mid-disconnect().
+
+        is_alive() can be true while run()'s finally is already closing the
+        loop, so call_soon_threadsafe races loop closure and raises
+        RuntimeError: Event loop is closed. Checking is_closed() first only
+        narrows that window. disconnect() must swallow it rather than propagate
+        into the caller -- in Home Assistant that is async_unload_entry.
+        """
+        self._connect_and_idle()
+
+        with patch.object(self.conn._loop, 'call_soon_threadsafe',
+                          side_effect=RuntimeError("Event loop is closed")):
+            self.conn.disconnect(timeout=1.0)   # must not raise
+
+        # The thread is still up (nothing woke it); a real disconnect still works.
+        self.conn.disconnect(timeout=5.0)
+        self.assertFalse(self.conn.is_alive())
+
+    def test_disconnect_from_the_reader_thread(self) -> None:
+        """A receive callback may call disconnect(); joining self would raise.
+
+        Thread.join() on the current thread raises "cannot join current thread",
+        so disconnect() schedules the shutdown and returns instead of joining.
+        The thread then unwinds on its own.
+        """
+        errors: List[BaseException] = []
+        # Hold the callback until connect() has returned on the main thread.
+        # Disconnecting sooner races connect()'s own predicate, which is a
+        # separate pre-existing issue and not what this test is about.
+        proceed = threading.Event()
+
+        def recv_cb(line: str) -> None:
+            if not proceed.wait(5.0):
+                return
+            try:
+                self.conn.disconnect(timeout=5.0)
+            except BaseException as exc:      # noqa: BLE001 - recorded, re-checked below
+                errors.append(exc)
+
+        self.conn._recv_cb = recv_cb
+        self.mock_reader.readline = AsyncMock(return_value=b"~OUTPUT,1,1,100.0\r\n")
+
+        async def do_login() -> None:
+            self.conn._reader = self.mock_reader
+            self.conn._writer = self.mock_writer
+
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login):
+            self.conn.connect()
+            proceed.set()
+            self.conn.join(5.0)
+
+        self.assertEqual(errors, [], f"disconnect() raised on the reader thread: {errors}")
+        self.assertFalse(self.conn.is_alive(), "reader thread should have unwound")
+
+
 if __name__ == '__main__':
     unittest.main()

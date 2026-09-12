@@ -127,8 +127,10 @@ class LutronConnection(threading.Thread):
   def disconnect(self, timeout: float = 5.0) -> None:
     """Closes the connection and stops the reader thread.
 
-    Idempotent, and safe to call from any thread other than the reader thread
-    itself. Blocks until the thread has exited or timeout seconds elapse.
+    Idempotent, and safe to call from any thread. Blocks until the thread has
+    exited or timeout seconds elapse, except when called from the reader thread
+    itself (e.g. inside a receive callback), where shutdown is scheduled and
+    this returns immediately rather than joining itself.
 
     Terminal: a LutronConnection that has been disconnected cannot be
     reconnected, because the underlying thread cannot be restarted. Callers
@@ -143,8 +145,17 @@ class LutronConnection(threading.Thread):
       if not self._loop.is_closed():
         self._loop.close()
       return
-    if not self._loop.is_closed():
+    try:
       self._loop.call_soon_threadsafe(self._shutdown_on_loop)
+    except RuntimeError:
+      # The reader finished and run() closed the loop between the is_alive()
+      # check above and this call. Nothing left to wake; checking is_closed()
+      # first would only narrow that window, not remove it.
+      pass
+    if threading.current_thread() is self:
+      # A receive callback asked us to disconnect. Shutdown is queued on our own
+      # loop and will run as the task unwinds; joining ourselves would raise.
+      return
     self.join(timeout)
     if self.is_alive():
       _LOGGER.warning("Reader thread did not exit within %.1fs", timeout)
@@ -668,7 +679,8 @@ class Lutron(object):
   def disconnect(self, timeout: float = 5.0) -> None:
     """Closes the connection and stops the background reader thread.
 
-    Idempotent. Blocks until the thread exits or timeout seconds elapse. A
+    Idempotent. Blocks until the thread exits or timeout seconds elapse, except
+    when called from the reader thread itself, where it returns immediately. A
     disconnected Lutron cannot be reconnected; construct a new one instead.
     """
     self._conn.disconnect(timeout)
