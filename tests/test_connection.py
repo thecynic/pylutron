@@ -234,6 +234,41 @@ class TestLutronConnection(AsyncTestBase):
         self.assertTrue(self.conn._done)
         self.assertIsInstance(self.conn._exception, LutronAuthenticationError)
 
+    async def test_main_loop_retries_network_failure_after_connect(self) -> None:
+        """A network failure on a reconnect (after a successful connect) must retry.
+
+        This is the 0.4.2 regression itself. _disconnect_locked() runs at the end of
+        every iteration and clears _connected, so guarding the network branch on
+        _connected misreads the retry as a never-connected failure: the loop sets
+        _done after exactly one reconnect attempt and the reader thread ends for
+        good. Guarding on _ever_connected keeps it retrying.
+
+        First _do_login() succeeds (the inner read loop breaks on an empty line,
+        simulating the drop); every later call raises OSError, which is in
+        _EXPECTED_NETWORK_EXCEPTIONS and is what a refused reconnect actually
+        raises. Reverting the guard to `if not self._connected` makes _do_login run
+        exactly twice, which this test catches.
+        """
+        calls = {'n': 0}
+
+        async def do_login() -> None:
+            calls['n'] += 1
+            if calls['n'] == 1:
+                self.conn._reader = self.mock_reader
+                self.mock_reader.readline.return_value = b""
+                return
+            if calls['n'] >= 3:
+                self.conn._done = True  # stop the loop once we've proven it retried
+            raise OSError(113, "Connect call failed ('192.168.1.50', 23)")
+
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login), \
+             patch('pylutron.asyncio.sleep', new=AsyncMock()):
+            await self.conn._main_loop()
+
+        self.assertGreaterEqual(calls['n'], 3,
+                                "network failure after a successful connect must retry, not give up")
+        self.assertIsNone(self.conn._exception)
+
 
 if __name__ == '__main__':
     unittest.main()
