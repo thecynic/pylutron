@@ -309,5 +309,121 @@ class TestLutronConnection(AsyncTestBase):
         self.assertIsNone(self.conn._exception)
 
 
+
+class TestLutronConnectionDisconnect(unittest.TestCase):
+    """disconnect() must stop the reader thread and free the event loop.
+
+    These drive the real thread rather than _main_loop directly, because the
+    whole point is the cross-thread shutdown handshake.
+    """
+
+    def setUp(self) -> None:
+        self.mock_reader = AsyncMock()
+        self.mock_writer = MagicMock()
+        self.mock_writer.drain = AsyncMock()
+
+        async def factory(host: str, port: int, connect_timeout: Optional[float] = None,
+                          encoding: Optional[str] = None) -> Tuple[AsyncMock, MagicMock]:
+            return self.mock_reader, self.mock_writer
+
+        self.conn = LutronConnection('127.0.0.1', 'user', 'pass', lambda line: None,
+                                     connection_factory=factory)
+
+    def tearDown(self) -> None:
+        # Never leave a reader thread behind, even if an assertion failed.
+        self.conn.disconnect(timeout=2.0)
+
+    def _connect_and_idle(self) -> None:
+        """Connects, then parks the reader in readline() like a live session."""
+        async def do_login() -> None:
+            self.conn._reader = self.mock_reader
+            self.conn._writer = self.mock_writer
+
+        async def park() -> bytes:
+            await asyncio.Event().wait()   # a connection with no traffic
+            return b""                     # pragma: no cover
+
+        self.mock_reader.readline = park
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login):
+            self.conn.connect()
+
+    def test_disconnect_stops_thread_and_closes_loop(self) -> None:
+        """The reader is blocked in readline(); disconnect() must still stop it.
+
+        Setting _done alone cannot do this -- readline() only returns on data or
+        a closed socket -- so this fails without the cancellation in
+        _shutdown_on_loop.
+        """
+        self._connect_and_idle()
+        self.assertTrue(self.conn.is_alive())
+
+        self.conn.disconnect(timeout=5.0)
+
+        self.assertFalse(self.conn.is_alive(), "reader thread should have exited")
+        self.assertTrue(self.conn._loop.is_closed(), "event loop should be closed")
+        # the socket goes away, not just the thread
+        self.mock_writer.close.assert_called()
+
+    def test_disconnect_is_idempotent(self) -> None:
+        """Repeat calls must not raise, including after the thread is gone."""
+        self._connect_and_idle()
+        self.conn.disconnect(timeout=5.0)
+        self.conn.disconnect(timeout=5.0)
+        self.conn.disconnect(timeout=5.0)
+        self.assertFalse(self.conn.is_alive())
+        self.assertTrue(self.conn._loop.is_closed())
+
+    def test_disconnect_without_connect(self) -> None:
+        """Never started: must not raise, and must still close the loop.
+
+        Thread.join() raises RuntimeError on a thread that was never started, so
+        disconnect() has to check is_alive() before joining.
+        """
+        self.conn.disconnect(timeout=5.0)
+        self.assertFalse(self.conn.is_alive())
+        self.assertTrue(self.conn._loop.is_closed())
+
+    def test_disconnect_interrupts_reconnect_backoff(self) -> None:
+        """A disconnect during the 5s backoff must not wait the backoff out.
+
+        The first session parks in readline() so connect() returns against a
+        connection that is genuinely up; the test then releases that read to
+        drop it, and every reconnect fails, leaving the loop in the backoff.
+        With a plain asyncio.sleep(5) there, disconnect() blocks until the sleep
+        expires; with the interruptible wait it returns at once.
+        """
+        calls = {'n': 0}
+        in_backoff = threading.Event()
+        release = asyncio.Event()
+
+        async def park_then_drop() -> bytes:
+            await release.wait()
+            return b""
+
+        async def do_login() -> None:
+            calls['n'] += 1
+            if calls['n'] == 1:
+                self.conn._reader = self.mock_reader
+                self.conn._writer = self.mock_writer
+                self.mock_reader.readline = park_then_drop
+                return
+            in_backoff.set()
+            raise OSError(113, "Connect call failed")
+
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login):
+            self.conn.connect()
+            # Drop the live session from the loop thread, which owns the event.
+            self.conn._loop.call_soon_threadsafe(release.set)
+            self.assertTrue(in_backoff.wait(timeout=10.0), "never reached the backoff")
+
+            start = time.monotonic()
+            self.conn.disconnect(timeout=10.0)
+            elapsed = time.monotonic() - start
+
+        self.assertFalse(self.conn.is_alive())
+        self.assertLess(elapsed, 4.0,
+                        f"disconnect waited out the backoff ({elapsed:.2f}s)")
+
+
 if __name__ == '__main__':
     unittest.main()

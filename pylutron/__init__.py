@@ -104,6 +104,7 @@ class LutronConnection(threading.Thread):
     self._connection_factory = connection_factory
     self._done = False
     self._loop = asyncio.new_event_loop()
+    self._main_task: Optional[asyncio.Task[None]] = None
     self._exception: Optional[LutronException] = None
 
     self.daemon = True
@@ -122,6 +123,43 @@ class LutronConnection(threading.Thread):
         if self._exception:
           raise self._exception
         raise LutronConnectionError("Failed to connect to Lutron controller")
+
+  def disconnect(self, timeout: float = 5.0) -> None:
+    """Closes the connection and stops the reader thread.
+
+    Idempotent, and safe to call from any thread other than the reader thread
+    itself. Blocks until the thread has exited or timeout seconds elapse.
+
+    Terminal: a LutronConnection that has been disconnected cannot be
+    reconnected, because the underlying thread cannot be restarted. Callers
+    that need a new session should construct a new Lutron.
+    """
+    with self._lock:
+      self._done = True
+      self._connect_cond.notify_all()
+    if not self.is_alive():
+      # Either never started, or already finished. Either way the loop is ours
+      # to close, and join() would raise if the thread was never started.
+      if not self._loop.is_closed():
+        self._loop.close()
+      return
+    if not self._loop.is_closed():
+      self._loop.call_soon_threadsafe(self._shutdown_on_loop)
+    self.join(timeout)
+    if self.is_alive():
+      _LOGGER.warning("Reader thread did not exit within %.1fs", timeout)
+
+  def _shutdown_on_loop(self) -> None:
+    """Wakes the reader for shutdown. Runs on the reader thread's loop.
+
+    Cancelling the task is what does the work: it unblocks a pending readline()
+    and cuts short the reconnect backoff alike. Closing the writer first means
+    the socket goes away even if the task is between awaits.
+    """
+    if self._writer:
+      self._writer.close()
+    if self._main_task is not None:
+      self._main_task.cancel()
 
   def send(self, cmd: str) -> None:
     """Sends the specified command to the lutron controller.
@@ -272,8 +310,17 @@ class LutronConnection(threading.Thread):
         self._disconnect_locked()
       
       if not self._done:
-        # don't spam reconnect
+        # don't spam reconnect. disconnect() cancels the task, so this does not
+        # delay shutdown.
         await asyncio.sleep(5)
+
+  async def _runner(self) -> None:
+    """Wraps _main_loop so that disconnect() has a task it can cancel."""
+    self._main_task = asyncio.current_task()
+    try:
+      await self._main_loop()
+    except asyncio.CancelledError:
+      _LOGGER.debug("Reader task cancelled during shutdown")
 
   def run(self) -> None:
     """Main entry point into our receive thread.
@@ -283,10 +330,21 @@ class LutronConnection(threading.Thread):
     _LOGGER.info("Started")
     asyncio.set_event_loop(self._loop)
     try:
-      self._loop.run_until_complete(self._main_loop())
+      self._loop.run_until_complete(self._runner())
     except Exception:
       _LOGGER.exception("Uncaught exception in run")
       raise
+    finally:
+      # Anyone blocked in connect() must not wait on a thread that is gone.
+      with self._lock:
+        self._done = True
+        self._connected = False
+        self._connect_cond.notify_all()
+      try:
+        self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+      finally:
+        self._loop.close()
+        _LOGGER.info("Stopped")
 
 
 class LutronXmlDbParser(object):
@@ -606,6 +664,14 @@ class Lutron(object):
   def connect(self) -> None:
     """Connects to the Lutron controller to send and receive commands and status"""
     self._conn.connect()
+
+  def disconnect(self, timeout: float = 5.0) -> None:
+    """Closes the connection and stops the background reader thread.
+
+    Idempotent. Blocks until the thread exits or timeout seconds elapse. A
+    disconnected Lutron cannot be reconnected; construct a new one instead.
+    """
+    self._conn.disconnect(timeout)
 
   def send(self, op: str, cmd: str, integration_id: int, *args: Any) -> None:
     """Formats and sends the requested command to the Lutron controller."""
