@@ -747,8 +747,14 @@ class LutronEntity(object):
     raise NotImplementedError
 
   def _dispatch_event(self, event: LutronEvent, params: Dict[str, Any]) -> None:
-    """Dispatches the specified event to all the subscribers."""
-    for handler, context in self._subscribers:
+    """Dispatches the specified event to all the subscribers.
+
+    Iterates a snapshot: a handler may unsubscribe itself, and consumers may
+    unsubscribe from another thread while the reader thread is dispatching.
+    Mutating the list under a live iterator silently skips the element after
+    the removed one, so some subscribers would miss the event entirely.
+    """
+    for handler, context in list(self._subscribers):
       handler(self, context, event, params)
 
   def subscribe(self, handler: LutronEventHandler, context: Any) -> Callable[[], None]:

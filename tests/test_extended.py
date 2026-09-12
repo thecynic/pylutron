@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
-from pylutron import Lutron, LutronXmlDbParser, Button, Keypad, LutronEntity, LutronEvent
+from pylutron import Lutron, LutronXmlDbParser, Button, Keypad, LutronEntity, LutronEvent, Output
 
 # Anonymized XML based on the real DbXmlInfo.xml structure
 LEGACY_AND_COMPLEX_XML = """<?xml version="1.0" encoding="UTF-8" ?>
@@ -157,6 +157,50 @@ class TestExtendedCoverage(unittest.TestCase):
         # Registering the same ID again should raise
         with self.assertRaises(IntegrationIdExistsError):
             self.lutron.register_id(Output._CMD_TYPE, output)
+
+
+class TestDispatchDuringUnsubscribe(unittest.TestCase):
+    """Unsubscribing while an event is being dispatched must not skip anyone."""
+
+    def test_unsubscribing_handler_does_not_skip_the_next_subscriber(self) -> None:
+        """_dispatch_event iterated the live list, so a removal skipped an element.
+
+        Reproduced deterministically here by having the first handler unsubscribe
+        itself, which is the same list mutation Home Assistant performs from its
+        own thread when an entity is removed (async_on_remove fires pylutron's
+        unsubscribe callable while the reader thread may be dispatching).
+
+        Without the snapshot, removing index 0 mid-iteration shifts the list and
+        the loop jumps straight to 'third' -- 'second' silently never fires.
+        """
+        lutron = Lutron('127.0.0.1', 'user', 'pass')
+        entity = LutronEntity(lutron, 'Test Entity', 'uuid-1')
+        called = []
+        unsub = {}
+
+        def first(obj, context, event, params):
+            called.append('first')
+            unsub['first']()
+
+        def second(obj, context, event, params):
+            called.append('second')
+
+        def third(obj, context, event, params):
+            called.append('third')
+
+        unsub['first'] = entity.subscribe(first, None)
+        entity.subscribe(second, None)
+        entity.subscribe(third, None)
+
+        entity._dispatch_event(Output.Event.LEVEL_CHANGED, {'level': 50.0})
+
+        self.assertEqual(called, ['first', 'second', 'third'],
+                         "a subscriber was skipped when another unsubscribed mid-dispatch")
+        # The removal still took effect for subsequent events.
+        called.clear()
+        entity._dispatch_event(Output.Event.LEVEL_CHANGED, {'level': 60.0})
+        self.assertEqual(called, ['second', 'third'])
+
 
 if __name__ == '__main__':
     unittest.main()
