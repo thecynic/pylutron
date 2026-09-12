@@ -110,7 +110,14 @@ class LutronConnection(threading.Thread):
     self.daemon = True
 
   def connect(self) -> None:
-    """Connects to the lutron controller."""
+    """Connects to the lutron controller.
+
+    Returns once the initial connection has succeeded, or raises if it could
+    not be established. Returning means we got connected at least once, not
+    that the connection is up right now -- the session may already have dropped
+    and be in the reconnect loop. That is the only guarantee available here,
+    since the controller can close the session at any moment.
+    """
     if self._connected or self.is_alive():
       raise ConnectionExistsError("Already connected")
     # After starting the thread we wait for it to post us
@@ -118,8 +125,11 @@ class LutronConnection(threading.Thread):
     # ensures that the caller only resumes when we are fully connected.
     self.start()
     with self._lock:
-      self._connect_cond.wait_for(lambda: self._connected or self._done)
-      if not self._connected and self._done:
+      # _ever_connected, not _connected: a session that comes up and drops
+      # before we reacquire the lock would otherwise leave the predicate false
+      # in both terms, and we would wait forever. _ever_connected latches.
+      self._connect_cond.wait_for(lambda: self._ever_connected or self._done)
+      if not self._ever_connected and self._done:
         if self._exception:
           raise self._exception
         raise LutronConnectionError("Failed to connect to Lutron controller")
