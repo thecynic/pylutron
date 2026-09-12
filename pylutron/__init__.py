@@ -197,7 +197,7 @@ class LutronConnection(threading.Thread):
         raise LutronAuthenticationError("Incorrect username or password")
     except asyncio.TimeoutError:
       _LOGGER.error("Timeout waiting for GNET or QNET prompt, checking if we are back at login")
-      raise LutronLoginError("Timed out waiting for GNET/QNET prompt (check credentials)")
+      raise LutronLoginError("Timed out waiting for GNET/QNET prompt")
 
     await self._send_coro("#MONITORING,12,2")
     await self._send_coro("#MONITORING,255,2")
