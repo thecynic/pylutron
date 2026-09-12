@@ -394,15 +394,19 @@ class TestLutronConnectionDisconnect(unittest.TestCase):
         """
         calls = {'n': 0}
         in_backoff = threading.Event()
-        release = asyncio.Event()
+        # Built on the reader's loop, not here: on Python 3.9 asyncio.Event()
+        # binds a loop via get_event_loop() at construction, and this thread has
+        # none. By the time connect() returns, _do_login has populated it.
+        loop_state: dict[str, asyncio.Event] = {}
 
         async def park_then_drop() -> bytes:
-            await release.wait()
+            await loop_state['release'].wait()
             return b""
 
         async def do_login() -> None:
             calls['n'] += 1
             if calls['n'] == 1:
+                loop_state['release'] = asyncio.Event()
                 self.conn._reader = self.mock_reader
                 self.conn._writer = self.mock_writer
                 self.mock_reader.readline = park_then_drop
@@ -413,7 +417,7 @@ class TestLutronConnectionDisconnect(unittest.TestCase):
         with patch.object(LutronConnection, '_do_login', side_effect=do_login):
             self.conn.connect()
             # Drop the live session from the loop thread, which owns the event.
-            self.conn._loop.call_soon_threadsafe(release.set)
+            self.conn._loop.call_soon_threadsafe(loop_state['release'].set)
             self.assertTrue(in_backoff.wait(timeout=10.0), "never reached the backoff")
 
             start = time.monotonic()
