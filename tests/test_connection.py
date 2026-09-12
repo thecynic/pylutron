@@ -163,7 +163,10 @@ class TestLutronConnection(AsyncTestBase):
             
         with patch.object(LutronConnection, '_do_login', side_effect=mock_do_login_success):
             self.conn.connect()
-            self.assertTrue(self.conn._connected)
+            # As in test_thread_start_and_connect: this fixture's readline drops
+            # the session immediately, so _connected may already be False by the
+            # time connect() returns. _ever_connected is what connect() promises.
+            self.assertTrue(self.conn._ever_connected)
             self.conn._done = True
             self.conn.join(timeout=1)
 
