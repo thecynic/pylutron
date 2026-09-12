@@ -122,7 +122,10 @@ class TestLutronConnection(AsyncTestBase):
         self.mock_reader.readline.side_effect = [b"~OUTPUT,1,1,100.0\r\n", b""]
 
         self.conn.connect()
-        self.assertTrue(self.conn._connected)
+        # connect() guarantees we got connected at least once, not that we are
+        # connected right now: this fixture's readline drops the session after
+        # one line, so _connected may already be back to False.
+        self.assertTrue(self.conn._ever_connected)
         time.sleep(0.1)
         self.assertIn('~OUTPUT,1,1,100.0', self.received_lines)
         
@@ -160,7 +163,10 @@ class TestLutronConnection(AsyncTestBase):
             
         with patch.object(LutronConnection, '_do_login', side_effect=mock_do_login_success):
             self.conn.connect()
-            self.assertTrue(self.conn._connected)
+            # As in test_thread_start_and_connect: this fixture's readline drops
+            # the session immediately, so _connected may already be False by the
+            # time connect() returns. _ever_connected is what connect() promises.
+            self.assertTrue(self.conn._ever_connected)
             self.conn._done = True
             self.conn.join(timeout=1)
 
@@ -307,6 +313,63 @@ class TestLutronConnection(AsyncTestBase):
         self.assertGreaterEqual(calls['n'], 3,
                                 "unexpected exception after a successful connect must retry, not give up")
         self.assertIsNone(self.conn._exception)
+
+
+
+class TestLutronConnectionConnect(unittest.TestCase):
+    """connect() must not wait on a flag the reader may already have cleared."""
+
+    def setUp(self) -> None:
+        self.mock_reader = AsyncMock()
+        self.mock_writer = MagicMock()
+        self.mock_writer.drain = AsyncMock()
+
+        async def factory(host: str, port: int, connect_timeout: Optional[float] = None,
+                          encoding: Optional[str] = None) -> Tuple[AsyncMock, MagicMock]:
+            return self.mock_reader, self.mock_writer
+
+        self.conn = LutronConnection('127.0.0.1', 'user', 'pass', lambda line: None,
+                                     connection_factory=factory)
+
+    def tearDown(self) -> None:
+        self.conn.disconnect(timeout=2.0)
+
+    def test_connect_returns_when_the_session_drops_immediately(self) -> None:
+        """A session accepted and closed at once must not hang connect().
+
+        _main_loop sets _connected then notifies, but if the first read returns
+        nothing the loop falls straight through to _disconnect_locked() and
+        clears the flag again -- possibly before this thread reacquires the lock
+        and re-checks. Waiting on _connected then leaves the predicate false in
+        both terms (_done is False, the loop is retrying) and connect() never
+        returns. Waiting on _ever_connected, which latches, cannot do that.
+
+        connect() runs on a helper thread so a regression fails the test instead
+        of hanging the whole suite.
+        """
+        async def do_login() -> None:
+            self.conn._reader = self.mock_reader
+            self.conn._writer = self.mock_writer
+            self.mock_reader.readline = AsyncMock(return_value=b"")
+
+        returned = threading.Event()
+        errors: List[BaseException] = []
+
+        def call_connect() -> None:
+            try:
+                self.conn.connect()
+            except BaseException as exc:   # noqa: BLE001 - re-checked below
+                errors.append(exc)
+            finally:
+                returned.set()
+
+        with patch.object(LutronConnection, '_do_login', side_effect=do_login):
+            threading.Thread(target=call_connect, daemon=True).start()
+            self.assertTrue(returned.wait(10.0),
+                            "connect() hung after the session dropped immediately")
+
+        self.assertEqual(errors, [], f"connect() raised: {errors}")
+        self.assertTrue(self.conn._ever_connected)
 
 
 
